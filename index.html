@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Blast Grid - 3D Tactical Bomb Arena</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@600;700;800;900&family=Luckiest+Guy&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="game-container"></div>
+
+    <!-- HUD Overlay -->
+    <div id="hud" class="hud-container hidden">
+      <div class="hud-header">
+        <div class="hud-stage-badge" id="hud-stage-badge">
+          <span class="hud-stage-pill" id="hud-stage-num">STAGE 1</span>
+          <span class="hud-stage-name" id="hud-stage-name">CYBER GRID</span>
+        </div>
+        <button id="btn-mute" class="hud-btn arcade-audio-btn" title="Toggle Sound" aria-pressed="false">
+          <span class="hud-btn-led"></span>
+          <span id="mute-icon-container" class="hud-btn-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#ff8c26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="rgba(255,140,38,0.2)"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+            </svg>
+          </span>
+          <span id="mute-text-label" class="hud-btn-text">AUDIO</span>
+        </button>
+      </div>
+
+      <!-- Tactical Upgrade Float Notice -->
+      <div id="hud-upgrade-banner" class="hud-upgrade-banner hidden">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#ff6b35" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="18 15 12 9 6 15"/>
+        </svg>
+        <span id="hud-upgrade-text">BLAST POWER UPGRADE</span>
+      </div>
+
+      <div class="hud-stats-bar">
+        <div class="stat-card range-card" id="card-blast-power">
+          <div class="stat-icon range-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3.2" fill="#ffffff"/>
+              <line x1="12" y1="2" x2="12" y2="5.5"/>
+              <line x1="12" y1="18.5" x2="12" y2="22"/>
+              <line x1="2" y1="12" x2="5.5" y2="12"/>
+              <line x1="18.5" y1="12" x2="22" y2="12"/>
+              <line x1="4.93" y1="4.93" x2="7.4" y2="7.4"/>
+              <line x1="16.6" y1="16.6" x2="19.07" y2="19.07"/>
+              <line x1="4.93" y1="19.07" x2="7.4" y2="16.6"/>
+              <line x1="16.6" y1="7.4" x2="19.07" y2="4.93"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-header-row">
+              <span class="stat-label">BLAST POWER</span>
+              <span id="stat-range-val" class="stat-value">1/7</span>
+            </div>
+            <div class="stat-meter" id="stat-range-meter">
+              <span class="meter-pip active fire"></span>
+              <span class="meter-pip fire"></span>
+              <span class="meter-pip fire"></span>
+              <span class="meter-pip fire"></span>
+              <span class="meter-pip fire"></span>
+              <span class="meter-pip fire"></span>
+              <span class="meter-pip fire"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card bomb-card" id="card-bombs">
+          <div class="stat-icon bomb-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="10.5" cy="13.5" r="5.5"/>
+              <line x1="14.4" y1="9.6" x2="19" y2="5"/>
+              <polyline points="15 5 19 5 19 9"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-header-row">
+              <span class="stat-label">BOMBS</span>
+              <span id="stat-bombs-val" class="stat-value">1/1</span>
+            </div>
+            <div class="stat-meter" id="stat-bombs-meter">
+              <span class="meter-pip active"></span>
+              <span class="meter-pip"></span>
+              <span class="meter-pip"></span>
+              <span class="meter-pip"></span>
+              <span class="meter-pip"></span>
+              <span class="meter-pip"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card speed-card" id="card-speed">
+          <div class="stat-icon speed-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 4 13 11 13 9 22 20 10 13 10 15 2"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-header-row">
+              <span class="stat-label">SPEED</span>
+              <span id="stat-speed-val" class="stat-value">4.8</span>
+            </div>
+            <div class="stat-meter" id="stat-speed-meter">
+              <span class="meter-pip active speed"></span>
+              <span class="meter-pip speed"></span>
+              <span class="meter-pip speed"></span>
+              <span class="meter-pip speed"></span>
+              <span class="meter-pip speed"></span>
+              <span class="meter-pip speed"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card enemy-card" id="card-enemies">
+          <div class="stat-icon enemy-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="6.5"/>
+              <circle cx="12" cy="12" r="2.2" fill="#ffffff"/>
+              <line x1="12" y1="2" x2="12" y2="5.5"/>
+              <line x1="12" y1="18.5" x2="12" y2="22"/>
+              <line x1="2" y1="12" x2="5.5" y2="12"/>
+              <line x1="18.5" y1="12" x2="22" y2="12"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-header-row">
+              <span class="stat-label">ENEMIES</span>
+              <span id="stat-enemies-val" class="stat-value">3</span>
+            </div>
+            <div class="stat-meter enemy-meter" id="stat-enemies-meter">
+              <span class="meter-pip active danger"></span>
+              <span class="meter-pip active danger"></span>
+              <span class="meter-pip active danger"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Virtual Touch Controls (Visible on mobile/tablets or small viewports) -->
+    <div id="touch-controls" class="touch-container">
+      <div class="touch-dpad">
+        <button id="touch-up" class="touch-btn touch-dir-up" aria-label="Up">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+        <div class="touch-dpad-middle">
+          <button id="touch-left" class="touch-btn touch-dir-left" aria-label="Left">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div class="touch-dpad-center"></div>
+          <button id="touch-right" class="touch-btn touch-dir-right" aria-label="Right">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <button id="touch-down" class="touch-btn touch-dir-down" aria-label="Down">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      <div class="touch-actions">
+        <button id="touch-bomb" class="touch-action-btn" aria-label="Bomb">
+          <span class="touch-action-icon">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#00d2b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="10.5" cy="13.5" r="5.5"/>
+              <line x1="14.4" y1="9.6" x2="19" y2="5"/>
+              <polyline points="15 5 19 5 19 9"/>
+            </svg>
+          </span>
+          <span class="touch-action-label">BOMB</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="modal-overlay">
+      <div class="loading-box arcade-modal loading-modal">
+        <div class="arcade-card-ribbon loading-ribbon">
+          <span class="ribbon-text">ARENA SYSTEM // BOOT SEQUENCE</span>
+        </div>
+        <div class="loading-title">BLAST GRID</div>
+        <div class="loading-subtitle">Powering the grid and arming blast systems</div>
+        <div class="progress-bar-container">
+          <div id="loading-progress-bar" class="progress-bar-fill"></div>
+        </div>
+        <div id="loading-status-text" class="loading-status">Loading visual assets...</div>
+      </div>
+    </div>
+
+    <!-- Modern AAA Start Page / Mode Select Screen -->
+    <div id="mode-select-modal" class="modal-overlay mode-modal-overlay">
+      <div class="mode-select-card">
+        <div class="mode-brand-header">
+          <div class="mode-brand-badge">AAA COMBAT PROTOCOL</div>
+          <h1 class="mode-brand-title">BLAST GRID 3D</h1>
+          <p class="mode-brand-subtitle">SELECT COMBAT MATRIX SIMULATION</p>
+        </div>
+
+        <div class="mode-header-row">
+          <span class="mode-header-label">CHOOSE YOUR MODE</span>
+          <span class="mode-header-counter">01 — 03</span>
+        </div>
+
+        <div class="mode-cards-list">
+          <!-- 01 Classic Adventure -->
+          <div class="mode-card active" data-mode="CLASSIC" id="mode-card-classic" tabindex="0">
+            <div class="mode-card-left">
+              <span class="mode-card-num">01</span>
+              <div class="mode-card-info">
+                <div class="mode-card-title">Classic adventure</div>
+                <div class="mode-card-desc">Clear the maze. Find your way out.</div>
+              </div>
+            </div>
+            <div class="mode-card-badge">Solo</div>
+          </div>
+
+          <!-- 02 Vs Computer -->
+          <div class="mode-card" data-mode="VS_CPU" id="mode-card-vscpu" tabindex="0">
+            <div class="mode-card-left">
+              <span class="mode-card-num">02</span>
+              <div class="mode-card-info">
+                <div class="mode-card-title">Vs computer</div>
+                <div class="mode-card-desc">One arena. One clever rival.</div>
+              </div>
+            </div>
+            <div class="mode-card-badge">Solo</div>
+          </div>
+
+          <!-- 03 Local Showdown -->
+          <div class="mode-card" data-mode="LOCAL_2P" id="mode-card-local2p" tabindex="0">
+            <div class="mode-card-left">
+              <span class="mode-card-num">03</span>
+              <div class="mode-card-info">
+                <div class="mode-card-title">Local showdown</div>
+                <div class="mode-card-desc">Settle it on the same keyboard.</div>
+              </div>
+            </div>
+            <div class="mode-card-badge">2P</div>
+          </div>
+        </div>
+
+        <!-- Dynamic Controls & Launch Action Footer -->
+        <div class="mode-footer">
+          <div class="mode-controls-hint" id="mode-controls-hint">
+            <span class="ctrl-tag">P1 CONTROLS:</span> [W A S D] / [ARROWS] TO MOVE • [SPACE] DROP BOMB
+          </div>
+          <button class="btn btn-arcade-start" id="btn-start-game">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <span>ENTER ARENA (SPACE / ENTER)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pause Modal -->
+    <div id="pause-modal" class="modal-overlay hidden">
+      <div class="modal-card arcade-modal pause-modal">
+        <div class="arcade-card-ribbon pause-ribbon">
+          <span class="ribbon-text">ARENA SYSTEM // STANDBY</span>
+        </div>
+        <div class="modal-badge pause-badge">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <rect x="6" y="4" width="4" height="16" rx="1"/>
+            <rect x="14" y="4" width="4" height="16" rx="1"/>
+          </svg>
+          <span>FUSES DISARMED</span>
+        </div>
+        <h2 class="modal-title pause-title">GRID PAUSED</h2>
+        <div class="arcade-bubble">
+          <p class="modal-desc">The arena is on standby. Patrols and blast timers will resume when you return.</p>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-resume" class="btn btn-arcade-resume">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <span>RESUME (P)</span>
+          </button>
+          <button class="btn btn-arcade-secondary btn-restart">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l6.73-5.19"/>
+            </svg>
+            <span>RESTART (R)</span>
+          </button>
+          <button class="btn btn-arcade-mode btn-mode-menu">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span>CHANGE MODE (M)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Victory / Stage Progression Modal -->
+    <div id="win-modal" class="modal-overlay hidden">
+      <div class="modal-card arcade-modal victory-modal">
+        <div class="arcade-card-ribbon victory-ribbon">
+          <span class="ribbon-text" id="win-ribbon-text">MISSION STATUS // GRID SECURED</span>
+        </div>
+        <div class="modal-badge victory-badge">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+          <span id="win-badge-text">SECTOR HOSTILES CLEARED</span>
+        </div>
+        <h2 class="modal-title win-title" id="win-title-text">STAGE 1 CLEARED</h2>
+        <div class="arcade-bubble">
+          <p class="modal-desc" id="win-desc-text">Every rogue patrol bot in this sector has been neutralized. Prepare to advance to the next combat zone.</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-arcade-win btn-restart" id="btn-win-action">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <span id="win-action-label">NEXT STAGE (R)</span>
+          </button>
+          <button class="btn btn-arcade-mode btn-mode-menu">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span>CHANGE MODE (M)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Defeat Modal -->
+    <div id="loss-modal" class="modal-overlay hidden">
+      <div class="modal-card arcade-modal defeat-modal">
+        <div class="arcade-card-ribbon defeat-ribbon">
+          <span class="ribbon-text">MISSION STATUS // RUN TERMINATED</span>
+        </div>
+        <div class="modal-badge defeat-badge">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span>PLAYER SIGNAL LOST</span>
+        </div>
+        <h2 class="modal-title loss-title">BLASTED OUT</h2>
+        <div class="arcade-bubble">
+          <p class="modal-desc">You were caught in the blast zone. Reset the grid and make the next fuse count.</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-arcade-retry btn-restart">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l6.73-5.19"/>
+            </svg>
+            <span>RETRY RUN (R)</span>
+          </button>
+          <button class="btn btn-arcade-mode btn-mode-menu">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span>CHANGE MODE (M)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
