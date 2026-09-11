@@ -18,6 +18,8 @@ export class InputManager {
   private menuUpRequested: boolean = false;
   private menuDownRequested: boolean = false;
   private modeMenuRequested: boolean = false;
+  private p1DetonateRequested: boolean = false;
+  private p2DetonateRequested: boolean = false;
 
   // Virtual touch controls state
   private touchMoveX: number = 0;
@@ -40,6 +42,10 @@ export class InputManager {
         this.p2BombRequested = true;
         this.menuSelectRequested = true;
         e.preventDefault();
+      } else if (e.code === 'KeyE') {
+        this.p1DetonateRequested = true;
+      } else if (e.code === 'ShiftRight' || e.code === 'Numpad1' || e.code === 'Numpad3' || e.code === 'KeyL') {
+        this.p2DetonateRequested = true;
       } else if (e.code === 'KeyR') {
         this.restartRequested = true;
       } else if (e.code === 'KeyP' || e.code === 'Escape') {
@@ -72,6 +78,10 @@ export class InputManager {
 
   public triggerTouchBomb(): void {
     this.p1BombRequested = true;
+  }
+
+  public triggerTouchDetonate(): void {
+    this.p1DetonateRequested = true;
   }
 
   public triggerTouchRestart(): void {
@@ -158,6 +168,22 @@ export class InputManager {
     return false;
   }
 
+  public consumeDetonate(): boolean {
+    if (this.p1DetonateRequested) {
+      this.p1DetonateRequested = false;
+      return true;
+    }
+    return false;
+  }
+
+  public consumeP2Detonate(): boolean {
+    if (this.p2DetonateRequested) {
+      this.p2DetonateRequested = false;
+      return true;
+    }
+    return false;
+  }
+
   public consumeRestart(): boolean {
     if (this.restartRequested) {
       this.restartRequested = false;
@@ -217,6 +243,8 @@ export class InputManager {
   public clearTransientInputs(): void {
     this.p1BombRequested = false;
     this.p2BombRequested = false;
+    this.p1DetonateRequested = false;
+    this.p2DetonateRequested = false;
     this.restartRequested = false;
     this.pauseRequested = false;
     this.muteRequested = false;

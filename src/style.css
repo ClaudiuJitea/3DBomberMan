@@ -125,6 +125,53 @@ button { font: inherit; }
   text-shadow: 0 0 10px rgba(0, 210, 184, 0.4);
 }
 
+.hud-timer-badge {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  width: 140px;
+  padding: 0 14px 0 10px;
+  background: var(--panel);
+  border: 1.5px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), inset 0 1px rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+  user-select: none;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+.hud-timer-badge:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+}
+.hud-timer-badge.hurry-up {
+  border-left-color: var(--red);
+  animation: timerHurryPulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes timerHurryPulse {
+  from { filter: drop-shadow(0 0 4px rgba(244, 63, 94, 0.6)); }
+  to { filter: drop-shadow(0 0 14px rgba(244, 63, 94, 0.95)); transform: scale(1.04); }
+}
+.hud-timer-icon {
+  display: inline-flex;
+  align-items: center;
+}
+.hud-timer-label {
+  font-family: var(--font-accent);
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.hud-timer-val {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1;
+  color: #ffffff;
+}
+
 .hud-lives-badge {
   pointer-events: auto;
   display: inline-flex;
@@ -311,11 +358,86 @@ button { font: inherit; }
   color: #22d3ee;
   text-shadow: 0 0 10px rgba(34, 211, 238, 0.85);
 }
+.remote-card {
+  --accent: #ec4899;
+  --accent-light: #f472b6;
+  --accent-dark: #db2777;
+  --accent-3d: #9d174d;
+}
+.stat-value.remote-active {
+  color: #f472b6;
+  text-shadow: 0 0 10px rgba(244, 114, 182, 0.85);
+}
+.bombpass-card {
+  --accent: #8b5cf6;
+  --accent-light: #a78bfa;
+  --accent-dark: #7c3aed;
+  --accent-3d: #5b21b6;
+}
+.stat-value.bombpass-active {
+  color: #a78bfa;
+  text-shadow: 0 0 10px rgba(167, 139, 250, 0.85);
+}
+.pierce-card {
+  --accent: #06b6d4;
+  --accent-light: #22d3ee;
+  --accent-dark: #0891b2;
+  --accent-3d: #0e7490;
+}
+.stat-value.pierce-active {
+  color: #22d3ee;
+  text-shadow: 0 0 10px rgba(34, 211, 238, 0.85);
+}
 .enemy-card {
   --accent: var(--red);
   --accent-light: var(--red-light);
   --accent-dark: var(--red-dark);
   --accent-3d: var(--red-3d);
+}
+
+/* Dynamic Powerups Section */
+.hud-powerups-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0 1px 0;
+  padding: 0 4px;
+}
+.hud-powerups-divider.hidden {
+  display: none !important;
+}
+.powerups-divider-line {
+  flex: 1;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.45), transparent);
+}
+.powerups-divider-title {
+  color: #38bdf8;
+  font-family: var(--font-accent);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.92;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+}
+
+.powerup-card {
+  animation: powerupPopIn 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.powerup-card.hidden {
+  display: none !important;
+}
+
+@keyframes powerupPopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .stat-icon {
@@ -394,12 +516,115 @@ button { font: inherit; }
   background: linear-gradient(180deg, var(--kick-light), var(--kick));
   box-shadow: 0 0 7px var(--kick);
 }
+.meter-pip.remote.active {
+  background: linear-gradient(180deg, #f472b6, #ec4899);
+  box-shadow: 0 0 7px #ec4899;
+}
+.meter-pip.bombpass.active {
+  background: linear-gradient(180deg, #a78bfa, #8b5cf6);
+  box-shadow: 0 0 7px #8b5cf6;
+}
+.meter-pip.pierce.active {
+  background: linear-gradient(180deg, #22d3ee, #06b6d4);
+  box-shadow: 0 0 7px #06b6d4;
+}
 
 @keyframes statUpgradeFlash {
   0%, 100% { transform: scale(1); filter: brightness(1); }
   38% { transform: translateX(6px) scale(1.04); filter: brightness(1.35); }
 }
 .card-upgrade-flash { animation: statUpgradeFlash 0.52s ease-out; }
+
+/* Sudden Death Hurry-Up Banner */
+.hud-hurryup-banner {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 130;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 28px;
+  background: linear-gradient(90deg, rgba(244, 63, 94, 0.95), rgba(235, 119, 28, 0.95));
+  border: 2px solid #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 0 30px rgba(244, 63, 94, 0.8), 0 8px 24px rgba(0, 0, 0, 0.7);
+  font-family: var(--font-display);
+  font-size: clamp(18px, 3.2vw, 30px);
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  animation: hurryUpFlash 0.5s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes hurryUpFlash {
+  from { transform: translateX(-50%) scale(0.96); filter: brightness(1); }
+  to { transform: translateX(-50%) scale(1.04); filter: brightness(1.25); }
+}
+
+/* Stage 4 Boss Health Meter */
+.hud-boss-bar {
+  position: absolute;
+  top: clamp(14px, 2vw, 26px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90vw, 420px);
+  padding: 8px 14px 10px;
+  background: rgba(21, 28, 36, 0.92);
+  border: 1.5px solid var(--line);
+  border-top: 3px solid var(--red);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 16px rgba(244, 63, 94, 0.3);
+  backdrop-filter: blur(8px);
+  z-index: 110;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.boss-bar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.boss-badge {
+  font-family: var(--font-accent);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--red);
+  color: #ffffff;
+  letter-spacing: 0.08em;
+}
+.boss-name {
+  font-family: var(--font-accent);
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.05em;
+}
+.boss-hp-val {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--red-light);
+}
+.boss-hp-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  background: #0f151c;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.boss-hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #e11d48, #f43f5e, #fb7185);
+  box-shadow: 0 0 10px #f43f5e;
+  transition: width 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 
 .hud-upgrade-banner {
   position: absolute;
@@ -425,6 +650,17 @@ button { font: inherit; }
 }
 .hud-upgrade-banner svg { stroke: var(--orange); }
 .hud-upgrade-banner.hidden { opacity: 0; transform: translate(-50%, -12px); }
+
+.touch-btn-detonate {
+  width: 72px;
+  height: 72px;
+  border-color: #f43f5e !important;
+  background: linear-gradient(180deg, #23121b 0%, #150a12 100%) !important;
+  box-shadow: 0 0 16px rgba(244, 63, 94, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
+}
+.touch-btn-detonate .touch-action-label {
+  color: #f43f5e !important;
+}
 
 /* Virtual Touch Controls (Picture 3) */
 .touch-container {

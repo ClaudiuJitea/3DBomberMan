@@ -37,7 +37,9 @@ export class Explosion {
     assets: AssetLoader,
     audio: AudioManager,
     onDestroyBlock: (col: number, row: number) => void,
-    onDetonateBomb: (col: number, row: number) => void
+    onDetonateBomb: (col: number, row: number) => void,
+    onDestroyPowerUp?: (col: number, row: number) => void,
+    isPierce: boolean = false
   ) {
     this.centerCol = centerCol;
     this.centerRow = centerRow;
@@ -49,7 +51,9 @@ export class Explosion {
     this.audio.playExplosion();
 
     // 1. Center flame - high-energy comic starburst core
-    this.queueFlameTile(centerCol, centerRow, 0, 0, assets.cloneModel('explosion-center'), 0);
+    this.queueFlameTile(centerCol, centerRow, 0, 0, assets.cloneModel('explosion-center'), 0, () => {
+      onDestroyPowerUp?.(centerCol, centerRow);
+    });
 
     // 2. Cardinal directions: [dx, dz, rotationY]
     // explosion-beam and explosion-tip are authored along local +Z axis
@@ -79,12 +83,18 @@ export class Explosion {
 
         const delay = dist * stepDelay;
 
-        // Breakable block gets destroyed and stops flame propagation
+        // Breakable block gets destroyed
         if (tile === TileType.BLOCK) {
-          this.queueFlameTile(c, r, dist, delay, assets.cloneModel('explosion-tip'), rotY, () => {
+          const isTip = !isPierce && ((dist === blastRange) || !grid.isInBounds(c + dx, r + dz));
+          this.queueFlameTile(c, r, dist, delay, assets.cloneModel(isTip ? 'explosion-tip' : 'explosion-beam'), rotY, () => {
             onDestroyBlock(c, r);
+            onDestroyPowerUp?.(c, r);
           });
-          break;
+          // Pierce bomb punches straight through breakable blocks!
+          if (!isPierce) {
+            break;
+          }
+          continue;
         }
 
         // Another bomb triggered by chain reaction
@@ -95,6 +105,7 @@ export class Explosion {
           const modelKey = isTip ? 'explosion-tip' : 'explosion-beam';
           this.queueFlameTile(c, r, dist, delay, assets.cloneModel(modelKey), rotY, () => {
             onDetonateBomb(c, r);
+            onDestroyPowerUp?.(c, r);
           });
           continue;
         }
@@ -105,7 +116,9 @@ export class Explosion {
         const isEndCap = (dist === blastRange) || !grid.isInBounds(nextC, nextR) || grid.getTile(nextC, nextR) === TileType.WALL;
         const modelKey = isEndCap ? 'explosion-tip' : 'explosion-beam';
 
-        this.queueFlameTile(c, r, dist, delay, assets.cloneModel(modelKey), rotY);
+        this.queueFlameTile(c, r, dist, delay, assets.cloneModel(modelKey), rotY, () => {
+          onDestroyPowerUp?.(c, r);
+        });
       }
     }
   }

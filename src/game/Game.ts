@@ -11,6 +11,7 @@ import { Enemy } from './Enemy';
 import { Bomb } from './Bomb';
 import { Explosion } from './Explosion';
 import { RivalAI } from './RivalAI';
+import { FallingBlock } from './FallingBlock';
 
 export class Game {
   private container: HTMLElement;
@@ -42,6 +43,16 @@ export class Game {
   private enemies: Enemy[] = [];
   private bombs: Bomb[] = [];
   private explosions: Explosion[] = [];
+  private fallingBlocks: FallingBlock[] = [];
+  private staticHazardBlocks: THREE.Group[] = [];
+
+  // Match Timer & Sudden Death
+  private roundTimer: number = 180;
+  private isSuddenDeath: boolean = false;
+  private suddenDeathSpiral: Array<{ col: number; row: number }> = [];
+  private suddenDeathIndex: number = 0;
+  private suddenDeathDropInterval: number = 0.85;
+  private suddenDeathTimer: number = 0;
 
   // State
   private state: GameState = GameState.LOADING;
@@ -60,6 +71,9 @@ export class Game {
     speed: 4.8,
     lives: GAME_CONFIG.player.initialLives,
     hasKick: false,
+    hasRemote: false,
+    hasBombPass: false,
+    hasPierce: false,
   };
 
   constructor(container: HTMLElement) {
@@ -225,6 +239,11 @@ export class Game {
     this.resetCamera();
     this.hasShownLossModal = false;
     this.modalInputCooldown = 0;
+    this.roundTimer = 180;
+    this.suddenDeathSpiral = this.generateSuddenDeathSpiral();
+    this.isSuddenDeath = false;
+    this.suddenDeathIndex = 0;
+    this.suddenDeathTimer = 0;
     this.state = GameState.PLAYING;
     this.ui.updateStageDisplay(1, 'VS COMPUTER', 'cyber');
     this.ui.showStateModal(GameState.PLAYING);
@@ -260,9 +279,54 @@ export class Game {
     this.resetCamera();
     this.hasShownLossModal = false;
     this.modalInputCooldown = 0;
+    this.roundTimer = 180;
+    this.suddenDeathSpiral = this.generateSuddenDeathSpiral();
+    this.isSuddenDeath = false;
+    this.suddenDeathIndex = 0;
+    this.suddenDeathTimer = 0;
     this.state = GameState.PLAYING;
     this.ui.updateStageDisplay(1, 'LOCAL SHOWDOWN', 'cyber');
     this.ui.showStateModal(GameState.PLAYING);
+  }
+
+  private generateSuddenDeathSpiral(): Array<{ col: number; row: number }> {
+    const spiral: Array<{ col: number; row: number }> = [];
+    let minC = 1;
+    let maxC = this.grid.cols - 2;
+    let minR = 1;
+    let maxR = this.grid.rows - 2;
+
+    while (minC <= maxC && minR <= maxR) {
+      // Top row left to right
+      for (let c = minC; c <= maxC; c++) {
+        spiral.push({ col: c, row: minR });
+      }
+      minR++;
+
+      // Right column top to bottom
+      for (let r = minR; r <= maxR; r++) {
+        spiral.push({ col: maxC, row: r });
+      }
+      maxC--;
+
+      // Bottom row right to left
+      if (minR <= maxR) {
+        for (let c = maxC; c >= minC; c--) {
+          spiral.push({ col: c, row: maxR });
+        }
+        maxR--;
+      }
+
+      // Left column bottom to top
+      if (minC <= maxC) {
+        for (let r = maxR; r >= minR; r--) {
+          spiral.push({ col: minC, row: r });
+        }
+        minC++;
+      }
+    }
+
+    return spiral;
   }
 
   private resetCamera(): void {
@@ -307,6 +371,9 @@ export class Game {
       this.player.speed = this.savedPlayerStats.speed;
       this.player.lives = this.savedPlayerStats.lives;
       this.player.hasKick = this.savedPlayerStats.hasKick;
+      this.player.hasRemote = this.savedPlayerStats.hasRemote;
+      this.player.hasBombPass = this.savedPlayerStats.hasBombPass;
+      this.player.hasPierce = this.savedPlayerStats.hasPierce;
     } else {
       this.savedPlayerStats = {
         maxBombs: 1,
@@ -314,6 +381,9 @@ export class Game {
         speed: 4.8,
         lives: GAME_CONFIG.player.initialLives,
         hasKick: false,
+        hasRemote: false,
+        hasBombPass: false,
+        hasPierce: false,
       };
     }
 
@@ -325,6 +395,10 @@ export class Game {
     this.resetCamera();
     this.hasShownLossModal = false;
     this.modalInputCooldown = 0;
+    this.roundTimer = 180;
+    this.isSuddenDeath = false;
+    this.suddenDeathIndex = 0;
+    this.suddenDeathTimer = 0;
     this.state = GameState.PLAYING;
     this.ui.updateStageDisplay(stageDef.id, stageDef.name, stageDef.theme);
     this.ui.showStateModal(GameState.PLAYING);
@@ -416,6 +490,9 @@ export class Game {
         speed: this.player.speed,
         lives: this.player.lives,
         hasKick: this.player.hasKick,
+        hasRemote: this.player.hasRemote,
+        hasBombPass: this.player.hasBombPass,
+        hasPierce: this.player.hasPierce,
       };
     }
     this.startStage(this.currentStageIndex + 1, true);
@@ -433,8 +510,81 @@ export class Game {
       speed: 4.8,
       lives: GAME_CONFIG.player.initialLives,
       hasKick: false,
+      hasRemote: false,
+      hasBombPass: false,
+      hasPierce: false,
     };
     this.startStage(0, false);
+  }
+
+  private createEnemy(type: EnemyType, col: number, row: number): Enemy {
+    let modelKey = 'enemy-scout';
+    if (type === EnemyType.HUNTER) modelKey = 'enemy-hunter';
+    else if (type === EnemyType.BLITZ) modelKey = 'enemy-blitz';
+    else if (type === EnemyType.PHANTOM) modelKey = 'enemy-phantom';
+    else if (type === EnemyType.CRUSHER) modelKey = 'enemy-crusher';
+    else if (type === EnemyType.CHOMPER) modelKey = 'enemy-chomper';
+    else if (type === EnemyType.BOSS) modelKey = 'enemy-boss';
+
+    const enemyMesh = this.assets.cloneModel(modelKey);
+    const cuckooDeath = this.assets.cloneModel('enemy-death');
+    const rocketDeath = this.assets.cloneModel('enemy-death-rocket');
+    const balloonDeath = this.assets.cloneModel('enemy-death-balloon');
+    const springDeath = this.assets.cloneModel('enemy-death-spring');
+
+    this.scene.add(enemyMesh);
+    const enemy = new Enemy(
+      type,
+      col,
+      row,
+      enemyMesh,
+      this.grid,
+      this.audio,
+      cuckooDeath,
+      rocketDeath,
+      balloonDeath,
+      springDeath,
+      {
+        onCrushBlock: (c: number, r: number) => {
+          if (this.grid.isBreakableBlock(c, r)) {
+            this.arena.destroyBlock(c, r);
+            this.audio.playCrusherSmash();
+          }
+        },
+        onEatBomb: (c: number, r: number) => {
+          const bombIdx = this.bombs.findIndex(b => b.col === c && b.row === r && !b.isDetonated);
+          if (bombIdx !== -1) {
+            const bomb = this.bombs[bombIdx];
+            bomb.isDetonated = true;
+            if (bomb.owner && typeof bomb.owner.activeBombs === 'number') {
+              bomb.owner.activeBombs = Math.max(0, bomb.owner.activeBombs - 1);
+            } else if (this.player) {
+              this.player.activeBombs = Math.max(0, this.player.activeBombs - 1);
+            }
+            bomb.dispose(this.scene, this.grid);
+            this.bombs.splice(bombIdx, 1);
+            this.audio.playChomperEat();
+          }
+        },
+        getBombAt: (c: number, r: number) => {
+          return this.bombs.some(b => b.col === c && b.row === r && !b.isDetonated);
+        },
+        getNearestBomb: (c: number, r: number) => {
+          let nearest: { col: number; row: number } | null = null;
+          let minDist = Infinity;
+          for (const b of this.bombs) {
+            if (b.isDetonated) continue;
+            const dist = Math.abs(b.col - c) + Math.abs(b.row - r);
+            if (dist < minDist) {
+              minDist = dist;
+              nearest = { col: b.col, row: b.row };
+            }
+          }
+          return nearest;
+        }
+      }
+    );
+    return enemy;
   }
 
   private spawnEnemies(stageDef: StageDefinition): void {
@@ -452,27 +602,7 @@ export class Game {
       for (let count = 0; count < spec.count; count++) {
         const pos = spawnPositions[posIdx % spawnPositions.length];
         posIdx++;
-
-        let modelKey = 'enemy-scout';
-        if (spec.type === EnemyType.HUNTER) modelKey = 'enemy-hunter';
-        else if (spec.type === EnemyType.BLITZ) modelKey = 'enemy-blitz';
-        else if (spec.type === EnemyType.PHANTOM) modelKey = 'enemy-phantom';
-
-        const enemyMesh = this.assets.cloneModel(modelKey);
-        const cuckooDeath = this.assets.cloneModel('enemy-death');
-        const rocketDeath = this.assets.cloneModel('enemy-death-rocket');
-
-        this.scene.add(enemyMesh);
-        const enemy = new Enemy(
-          spec.type,
-          pos.col,
-          pos.row,
-          enemyMesh,
-          this.grid,
-          this.audio,
-          cuckooDeath,
-          rocketDeath
-        );
+        const enemy = this.createEnemy(spec.type, pos.col, pos.row);
         this.enemies.push(enemy);
       }
     }
@@ -492,27 +622,7 @@ export class Game {
       for (let count = 0; count < spec.count; count++) {
         const pos = spawnPositions[posIdx % spawnPositions.length];
         posIdx++;
-
-        let modelKey = 'enemy-scout';
-        if (spec.type === EnemyType.HUNTER) modelKey = 'enemy-hunter';
-        else if (spec.type === EnemyType.BLITZ) modelKey = 'enemy-blitz';
-        else if (spec.type === EnemyType.PHANTOM) modelKey = 'enemy-phantom';
-
-        const enemyMesh = this.assets.cloneModel(modelKey);
-        const cuckooDeath = this.assets.cloneModel('enemy-death');
-        const rocketDeath = this.assets.cloneModel('enemy-death-rocket');
-
-        this.scene.add(enemyMesh);
-        const enemy = new Enemy(
-          spec.type,
-          pos.col,
-          pos.row,
-          enemyMesh,
-          this.grid,
-          this.audio,
-          cuckooDeath,
-          rocketDeath
-        );
+        const enemy = this.createEnemy(spec.type, pos.col, pos.row);
         this.enemies.push(enemy);
       }
     }
@@ -552,6 +662,21 @@ export class Game {
       ex.cleanup();
     }
     this.explosions = [];
+
+    // Clear falling blocks & hazard blocks
+    for (const fb of this.fallingBlocks) {
+      fb.dispose(this.scene);
+    }
+    this.fallingBlocks = [];
+    for (const sb of this.staticHazardBlocks) {
+      this.scene.remove(sb);
+    }
+    this.staticHazardBlocks = [];
+    this.isSuddenDeath = false;
+    this.suddenDeathIndex = 0;
+    this.suddenDeathTimer = 0;
+    this.ui.hideHurryUpBanner();
+    this.ui.hideBossHealth();
   }
 
   private handleInput(): void {
@@ -619,17 +744,31 @@ export class Game {
       }
     }
 
-    // Bomb placement for Player 1
+    // Bomb placement and Detonation for Player 1
     if (this.state === GameState.PLAYING && this.player && this.player.isAlive) {
       if (this.input.consumeBomb()) {
         this.tryPlaceBombForPlayer(this.player);
       }
+      if (this.player.hasRemote && this.input.consumeDetonate()) {
+        const remoteBombs = this.bombs.filter(b => b.owner === this.player && b.isRemote && !b.isDetonated);
+        if (remoteBombs.length > 0) {
+          remoteBombs[0].forceDetonate();
+          this.audio.playRemoteDetonate();
+        }
+      }
     }
 
-    // Bomb placement for Player 2 (Local Showdown)
+    // Bomb placement and Detonation for Player 2 (Local Showdown)
     if (this.state === GameState.PLAYING && this.currentMode === GameMode.LOCAL_2P && this.player2 && this.player2.isAlive) {
       if (this.input.consumeP2Bomb()) {
         this.tryPlaceBombForPlayer(this.player2);
+      }
+      if (this.player2.hasRemote && this.input.consumeP2Detonate()) {
+        const remoteBombs = this.bombs.filter(b => b.owner === this.player2 && b.isRemote && !b.isDetonated);
+        if (remoteBombs.length > 0) {
+          remoteBombs[0].forceDetonate();
+          this.audio.playRemoteDetonate();
+        }
       }
     }
   }
@@ -654,7 +793,17 @@ export class Game {
     const bombMesh = this.assets.cloneModel('bomb');
     this.scene.add(bombMesh);
 
-    const bomb = new Bomb(col, row, p.blastRange, bombMesh, this.grid, this.audio, p);
+    const bomb = new Bomb(
+      col,
+      row,
+      p.blastRange,
+      bombMesh,
+      this.grid,
+      this.audio,
+      p,
+      p.hasRemote,
+      p.hasPierce
+    );
     this.bombs.push(bomb);
   }
 
@@ -698,7 +847,11 @@ export class Game {
         if (chainedBomb) {
           chainedBomb.forceDetonate();
         }
-      }
+      },
+      (pCol, pRow) => {
+        this.arena.destroyPowerUpAt(pCol, pRow, this.audio);
+      },
+      bomb.isPierce
     );
 
     this.explosions.push(explosion);
@@ -718,6 +871,81 @@ export class Game {
 
     if (this.state !== GameState.PLAYING && this.state !== GameState.WON && this.state !== GameState.LOST) {
       return;
+    }
+
+    // Match timer countdown & Sudden Death
+    if (this.state === GameState.PLAYING) {
+      this.roundTimer = Math.max(0, this.roundTimer - delta);
+      this.ui.updateTimer(this.roundTimer);
+
+      // Sudden Death in Versus modes
+      if (this.currentMode === GameMode.VS_CPU || this.currentMode === GameMode.LOCAL_2P) {
+        if (this.roundTimer <= 45 && !this.isSuddenDeath) {
+          this.isSuddenDeath = true;
+          this.audio.playHurryUpAlert();
+          this.ui.showHurryUpBanner();
+        }
+
+        if (this.isSuddenDeath) {
+          this.suddenDeathTimer += delta;
+          if (this.suddenDeathTimer >= this.suddenDeathDropInterval) {
+            this.suddenDeathTimer = 0;
+            if (this.suddenDeathIndex < this.suddenDeathSpiral.length) {
+              const coord = this.suddenDeathSpiral[this.suddenDeathIndex++];
+              const blockMesh = this.assets.cloneModel('falling-block');
+              this.scene.add(blockMesh);
+              this.fallingBlocks.push(new FallingBlock(coord.col, coord.row, blockMesh, this.grid, this.audio));
+            }
+          }
+        }
+      }
+    }
+
+    // Update Falling Hazard Blocks (Sudden Death)
+    for (let i = this.fallingBlocks.length - 1; i >= 0; i--) {
+      const fb = this.fallingBlocks[i];
+      const landed = fb.update(delta, (col, row) => {
+        this.cameraShakeIntensity = Math.min(0.85, this.cameraShakeIntensity + 0.45);
+        this.staticHazardBlocks.push(fb.mesh);
+        this.grid.setTile(col, row, TileType.WALL);
+
+        // Squash Player 1
+        if (this.player && this.player.isAlive) {
+          const p1Coord = this.player.getGridCoords();
+          if (p1Coord.col === col && p1Coord.row === row) {
+            this.player.kill(DeathType.ENEMY);
+          }
+        }
+
+        // Squash Player 2
+        if (this.player2 && this.player2.isAlive) {
+          const p2Coord = this.player2.getGridCoords();
+          if (p2Coord.col === col && p2Coord.row === row) {
+            this.player2.kill(DeathType.ENEMY);
+          }
+        }
+
+        // Squash Enemies
+        for (const enemy of this.enemies) {
+          if (enemy.isAlive && enemy.col === col && enemy.row === row) {
+            enemy.kill();
+          }
+        }
+
+        // Detonate bomb underneath
+        const bombUnder = this.bombs.find(b => b.col === col && b.row === row && !b.isDetonated);
+        if (bombUnder) {
+          bombUnder.forceDetonate();
+        }
+
+        // Destroy breakable blocks and powerups
+        this.arena.destroyBlock(col, row);
+        this.arena.destroyPowerUpAt(col, row, this.audio);
+      });
+
+      if (landed) {
+        this.fallingBlocks.splice(i, 1);
+      }
     }
 
     // 1. Update Camera Shake
@@ -836,13 +1064,16 @@ export class Game {
           if (type !== PowerUpType.SHIELD && type !== PowerUpType.EXTRA_LIFE && type !== PowerUpType.BOMB_KICK) {
             this.audio.playPowerUp();
           }
-          const maxVal = (type === PowerUpType.BLAST_RANGE) ? 7 : (type === PowerUpType.BOMB_COUNT ? 6 : (type === PowerUpType.SHIELD ? 1 : (type === PowerUpType.EXTRA_LIFE ? GAME_CONFIG.player.maxLives : 1)));
+          const maxVal = (type === PowerUpType.BLAST_RANGE || type === PowerUpType.FULL_FIRE) ? 7 : (type === PowerUpType.BOMB_COUNT ? 6 : (type === PowerUpType.SHIELD ? 1 : (type === PowerUpType.EXTRA_LIFE ? GAME_CONFIG.player.maxLives : 1)));
           let curVal = 0;
-          if (type === PowerUpType.BLAST_RANGE) curVal = this.player.blastRange;
+          if (type === PowerUpType.BLAST_RANGE || type === PowerUpType.FULL_FIRE) curVal = this.player.blastRange;
           else if (type === PowerUpType.BOMB_COUNT) curVal = this.player.maxBombs;
           else if (type === PowerUpType.SHIELD) curVal = 1;
           else if (type === PowerUpType.EXTRA_LIFE) curVal = this.player.lives;
           else if (type === PowerUpType.BOMB_KICK) curVal = 1;
+          else if (type === PowerUpType.REMOTE_CONTROL) curVal = 1;
+          else if (type === PowerUpType.BOMB_PASS) curVal = 1;
+          else if (type === PowerUpType.PIERCE_BOMB) curVal = 1;
           else curVal = Math.round((this.player.speed - 4.8) / 0.8) + 1;
           this.ui.triggerPowerUpFeedback(type, curVal, maxVal);
         }
@@ -883,11 +1114,14 @@ export class Game {
             const dx1 = this.player!.position.x - enemy.mesh.position.x;
             const dz1 = this.player!.position.z - enemy.mesh.position.z;
             if (dx1 * dx1 + dz1 * dz1 < 0.95) {
-              const hadShield = this.player!.hasShield;
-              this.player!.kill(DeathType.ENEMY);
-              if (hadShield && this.player!.isAlive) {
-                // Shield kinetic discharge vaporizes the attacking robot
-                enemy.kill();
+              const isBlocked = this.isBombBetween(enemy.mesh.position, this.player!.position);
+              if (!isBlocked) {
+                const hadShield = this.player!.hasShield;
+                this.player!.kill(DeathType.ENEMY);
+                if (hadShield && this.player!.isAlive) {
+                  // Shield kinetic discharge vaporizes the attacking robot
+                  enemy.kill();
+                }
               }
             }
           }
@@ -897,11 +1131,14 @@ export class Game {
             const dx2 = this.player2!.position.x - enemy.mesh.position.x;
             const dz2 = this.player2!.position.z - enemy.mesh.position.z;
             if (dx2 * dx2 + dz2 * dz2 < 0.95) {
-              const hadShield = this.player2!.hasShield;
-              this.player2!.kill(DeathType.ENEMY);
-              if (hadShield && this.player2!.isAlive) {
-                // Shield kinetic discharge vaporizes the attacking robot
-                enemy.kill();
+              const isBlocked = this.isBombBetween(enemy.mesh.position, this.player2!.position);
+              if (!isBlocked) {
+                const hadShield = this.player2!.hasShield;
+                this.player2!.kill(DeathType.ENEMY);
+                if (hadShield && this.player2!.isAlive) {
+                  // Shield kinetic discharge vaporizes the attacking robot
+                  enemy.kill();
+                }
               }
             }
           }
@@ -912,26 +1149,46 @@ export class Game {
       }
     }
 
+    // Boss health display update
+    const boss = this.enemies.find(e => e.type === EnemyType.BOSS && e.isAlive && !e.isDying);
+    if (boss) {
+      this.ui.updateBossHealth(boss.health, boss.maxHealth);
+    } else {
+      this.ui.hideBossHealth();
+    }
+
     // 8. Victory / Defeat Check per Mode
     if (this.currentMode === GameMode.CLASSIC) {
-      // Classic Mode Win (only if player is still alive and not dying!)
+      // If all enemies eliminated, activate the Exit Portal!
+      if (activeEnemiesCount === 0 && this.enemies.length === 0) {
+        if (!this.arena.isExitPortalActive) {
+          this.arena.activateExitPortal(this.audio);
+          this.ui.showNotification('HOSTILES CLEARED! ENTER THE EXIT PORTAL');
+        }
+      }
+
+      // Classic Mode Win when stepping into the illuminated Exit Portal
       if (
         this.state === GameState.PLAYING &&
         this.player &&
         this.player.isAlive &&
         !this.player.isDying &&
-        activeEnemiesCount === 0 &&
-        this.enemies.length === 0
+        this.arena.isExitPortalActive &&
+        this.arena.isExitPortalRevealed &&
+        this.arena.exitPortalPos
       ) {
-        this.state = GameState.WON;
-        this.audio.playVictory();
-        const isCampaignComplete = this.currentStageIndex >= STAGE_DEFINITIONS.length - 1;
-        const nextStageName = isCampaignComplete ? undefined : STAGE_DEFINITIONS[this.currentStageIndex + 1].name;
-        this.ui.configureVictoryModal(isCampaignComplete, this.currentStageIndex + 1, nextStageName);
-        this.input.clearTransientInputs();
-        this.hasShownLossModal = true;
-        this.modalInputCooldown = 0.6;
-        this.ui.showStateModal(GameState.WON);
+        const pCoords = this.player.getGridCoords();
+        if (pCoords.col === this.arena.exitPortalPos.col && pCoords.row === this.arena.exitPortalPos.row) {
+          this.state = GameState.WON;
+          this.audio.playVictory();
+          const isCampaignComplete = this.currentStageIndex >= STAGE_DEFINITIONS.length - 1;
+          const nextStageName = isCampaignComplete ? undefined : STAGE_DEFINITIONS[this.currentStageIndex + 1].name;
+          this.ui.configureVictoryModal(isCampaignComplete, this.currentStageIndex + 1, nextStageName);
+          this.input.clearTransientInputs();
+          this.hasShownLossModal = true;
+          this.modalInputCooldown = 0.6;
+          this.ui.showStateModal(GameState.WON);
+        }
       }
 
       // Classic Mode Death / Respawn / Defeat Handling
@@ -1103,7 +1360,10 @@ export class Game {
         this.player.hasShield,
         this.player.lives,
         GAME_CONFIG.player.maxLives,
-        this.player.hasKick
+        this.player.hasKick,
+        this.player.hasRemote,
+        this.player.hasBombPass,
+        this.player.hasPierce
       );
     }
   }
@@ -1114,6 +1374,42 @@ export class Game {
     this.update(delta);
     this.renderer.render(this.scene, this.camera);
   };
+
+  private isBombBetween(posA: THREE.Vector3, posB: THREE.Vector3): boolean {
+    const vx = posB.x - posA.x;
+    const vz = posB.z - posA.z;
+    const lenSq = vx * vx + vz * vz;
+    if (lenSq < 0.0001) return false;
+
+    const cellA = this.grid.worldToGrid(posA);
+    const cellB = this.grid.worldToGrid(posB);
+
+    for (const bomb of this.bombs) {
+      if (bomb.isDetonated) continue;
+
+      // If bomb is in the same cell as either endpoint while endpoints are in different cells
+      if (cellA.col !== cellB.col || cellA.row !== cellB.row) {
+        if ((bomb.col === cellA.col && bomb.row === cellA.row) ||
+            (bomb.col === cellB.col && bomb.row === cellB.row)) {
+          return true;
+        }
+      }
+
+      // Point-to-segment distance check
+      const bx = bomb.mesh.position.x;
+      const bz = bomb.mesh.position.z;
+      const t = Math.max(0, Math.min(1, ((bx - posA.x) * vx + (bz - posA.z) * vz) / lenSq));
+      const projX = posA.x + t * vx;
+      const projZ = posA.z + t * vz;
+      const distSq = (bx - projX) * (bx - projX) + (bz - projZ) * (bz - projZ);
+
+      // Bomb physical collider radius (~0.8 units)
+      if (distSq < 0.64 && t > 0.05 && t < 0.95) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   private onWindowResize(): void {
     this.camera.aspect = window.innerWidth / window.innerHeight;

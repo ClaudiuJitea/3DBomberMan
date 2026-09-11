@@ -15,12 +15,16 @@ export class Bomb {
   public isMoving: boolean = false;
   public moveDir: { x: number; z: number } = { x: 0, z: 0 };
   public moveSpeed: number = 9.2; // Smooth arcade sliding velocity
+  public isRemote: boolean = false;
+  public isPierce: boolean = false;
 
   private initialFuse: number;
   private audio: AudioManager;
   private baseWorldPos: THREE.Vector3;
   private mixer: THREE.AnimationMixer | null = null;
   private lastTickSec: number = 0;
+  private beaconMesh: THREE.Mesh | null = null;
+  private animTime: number = 0;
 
   constructor(
     col: number,
@@ -29,7 +33,9 @@ export class Bomb {
     mesh: THREE.Group,
     grid: Grid,
     audio: AudioManager,
-    owner: any = null
+    owner: any = null,
+    isRemote: boolean = false,
+    isPierce: boolean = false
   ) {
     this.col = col;
     this.row = row;
@@ -39,6 +45,8 @@ export class Bomb {
     this.mesh = mesh;
     this.audio = audio;
     this.owner = owner;
+    this.isRemote = isRemote;
+    this.isPierce = isPierce;
 
     if (this.mesh.animations && this.mesh.animations.length > 0) {
       this.mixer = new THREE.AnimationMixer(this.mesh);
@@ -48,6 +56,36 @@ export class Bomb {
         action.clampWhenFinished = true;
         action.play();
       }
+    }
+
+    if (this.isRemote) {
+      // High-tech red/cyan pulsing remote detonator antenna beacon
+      const beaconGeo = new THREE.SphereGeometry(0.12, 10, 10);
+      const beaconMat = new THREE.MeshStandardMaterial({
+        color: 0xff1525,
+        roughness: 0.1,
+        emissive: 0xff1525,
+        emissiveIntensity: 4.5,
+      });
+      this.beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+      this.beaconMesh.position.set(0, 0.72, 0);
+      this.mesh.add(this.beaconMesh);
+    }
+
+    if (this.isPierce) {
+      // Plasma purple tint for pierce bombs
+      this.mesh.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const m = child as THREE.Mesh;
+          if (m.material) {
+            const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+            if ((mat as THREE.MeshStandardMaterial).emissive) {
+              (mat as THREE.MeshStandardMaterial).emissive.setHex(0x9922ee);
+              (mat as THREE.MeshStandardMaterial).emissiveIntensity = 2.5;
+            }
+          }
+        }
+      });
     }
 
     this.baseWorldPos = grid.gridToWorld(col, row, FLOOR_HEIGHT);
@@ -133,6 +171,17 @@ export class Bomb {
           this.audio.playBombBounce();
         }
       }
+    }
+
+    this.animTime += delta;
+
+    if (this.isRemote) {
+      if (this.beaconMesh) {
+        // High-energy pulsing beacon on remote bomb
+        const pulse = 0.5 + 0.5 * Math.sin(this.animTime * 8.0);
+        this.beaconMesh.scale.set(1.0 + pulse * 0.4, 1.0 + pulse * 0.4, 1.0 + pulse * 0.4);
+      }
+      return this.isDetonated;
     }
 
     this.fuseTimer -= delta;

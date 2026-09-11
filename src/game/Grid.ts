@@ -56,12 +56,15 @@ export class Grid {
     return this.fireIntensity[row][col] > 0;
   }
 
-  public isWalkable(col: number, row: number, allowBombAt?: { col: number; row: number }): boolean {
+  public isWalkable(col: number, row: number, allowBombAt?: { col: number; row: number } | boolean): boolean {
     if (!this.isInBounds(col, row)) return false;
     const tile = this.tiles[row][col];
     if (tile === TileType.EMPTY) return true;
-    if (tile === TileType.BOMB && allowBombAt && allowBombAt.col === col && allowBombAt.row === row) {
-      return true;
+    if (tile === TileType.BOMB) {
+      if (allowBombAt === true) return true;
+      if (typeof allowBombAt === 'object' && allowBombAt && allowBombAt.col === col && allowBombAt.row === row) {
+        return true;
+      }
     }
     return false;
   }

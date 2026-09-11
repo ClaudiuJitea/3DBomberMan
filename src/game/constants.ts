@@ -18,6 +18,10 @@ export enum PowerUpType {
   SHIELD = 'SHIELD',
   EXTRA_LIFE = 'EXTRA_LIFE',
   BOMB_KICK = 'BOMB_KICK',
+  REMOTE_CONTROL = 'REMOTE_CONTROL',
+  BOMB_PASS = 'BOMB_PASS',
+  PIERCE_BOMB = 'PIERCE_BOMB',
+  FULL_FIRE = 'FULL_FIRE',
 }
 
 export enum GameState {
@@ -40,6 +44,9 @@ export enum EnemyType {
   HUNTER = 'HUNTER',
   BLITZ = 'BLITZ',
   PHANTOM = 'PHANTOM',
+  CRUSHER = 'CRUSHER',
+  CHOMPER = 'CHOMPER',
+  BOSS = 'BOSS',
 }
 
 export enum DeathType {
@@ -121,6 +128,7 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
       { type: EnemyType.SCOUT, count: 1 },
       { type: EnemyType.HUNTER, count: 1 },
       { type: EnemyType.BLITZ, count: 1 },
+      { type: EnemyType.CRUSHER, count: 1 },
     ],
   },
   {
@@ -145,6 +153,7 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
       { type: EnemyType.SCOUT, count: 1 },
       { type: EnemyType.HUNTER, count: 1 },
       { type: EnemyType.PHANTOM, count: 1 },
+      { type: EnemyType.CHOMPER, count: 1 },
     ],
   },
   {
@@ -166,10 +175,10 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     blockModel: 'breakable-block-ice',
     propModels: ['prop-cryo-crystal', 'prop-pillar'],
     enemies: [
-      { type: EnemyType.SCOUT, count: 1 },
       { type: EnemyType.HUNTER, count: 1 },
-      { type: EnemyType.BLITZ, count: 1 },
-      { type: EnemyType.PHANTOM, count: 1 },
+      { type: EnemyType.CRUSHER, count: 1 },
+      { type: EnemyType.CHOMPER, count: 1 },
+      { type: EnemyType.BOSS, count: 1 },
     ],
   },
 ];
@@ -194,14 +203,18 @@ export const GAME_CONFIG = {
     duration: 0.70,        // seconds
   },
   powerup: {
-    dropChance: 0.22,      // Balanced drop rate
+    dropChance: 0.28,      // Balanced drop rate
     weights: {
-      [PowerUpType.BOMB_COUNT]: 0.25,
-      [PowerUpType.BLAST_RANGE]: 0.25,
-      [PowerUpType.SPEED]: 0.20,
-      [PowerUpType.BOMB_KICK]: 0.12,
-      [PowerUpType.SHIELD]: 0.10,
-      [PowerUpType.EXTRA_LIFE]: 0.08,
+      [PowerUpType.BOMB_COUNT]: 0.17,
+      [PowerUpType.BLAST_RANGE]: 0.17,
+      [PowerUpType.SPEED]: 0.14,
+      [PowerUpType.BOMB_KICK]: 0.10,
+      [PowerUpType.REMOTE_CONTROL]: 0.09,
+      [PowerUpType.BOMB_PASS]: 0.09,
+      [PowerUpType.PIERCE_BOMB]: 0.08,
+      [PowerUpType.FULL_FIRE]: 0.05,
+      [PowerUpType.SHIELD]: 0.06,
+      [PowerUpType.EXTRA_LIFE]: 0.05,
     },
   },
   enemies: {
@@ -209,6 +222,10 @@ export const GAME_CONFIG = {
     hunterSpeed: 3.4,
     blitzSpeed: 4.4,
     phantomSpeed: 2.3,
+    crusherSpeed: 2.2,
+    chomperSpeed: 3.2,
+    bossSpeed: 2.5,
+    bossHealth: 3,
   },
   camera: {
     fov: 42,
@@ -224,8 +241,13 @@ export const ASSET_PATHS: Record<string, string> = {
   'enemy-hunter': '/assets/models/enemy-hunter.glb',
   'enemy-blitz': '/assets/models/enemy-blitz.glb',
   'enemy-phantom': '/assets/models/enemy-phantom.glb',
+  'enemy-crusher': '/assets/models/enemy-crusher.glb',
+  'enemy-chomper': '/assets/models/enemy-chomper.glb',
+  'enemy-boss': '/assets/models/enemy-boss.glb',
   'enemy-death': '/assets/models/enemy-death.glb',
   'enemy-death-rocket': '/assets/models/enemy-death-rocket.glb',
+  'enemy-death-balloon': '/assets/models/enemy-death-balloon.glb',
+  'enemy-death-spring': '/assets/models/enemy-death-spring.glb',
   'floor-tile': '/assets/models/floor-tile.glb',
   'solid-wall': '/assets/models/solid-wall.glb',
   'breakable-block': '/assets/models/breakable-block.glb',
@@ -258,6 +280,12 @@ export const ASSET_PATHS: Record<string, string> = {
   'powerup-shield': '/assets/models/powerup-shield.glb',
   'powerup-life': '/assets/models/powerup-life.glb',
   'powerup-kick': '/assets/models/powerup-kick.glb',
+  'powerup-remote': '/assets/models/powerup-remote.glb',
+  'powerup-bombpass': '/assets/models/powerup-bombpass.glb',
+  'powerup-pierce': '/assets/models/powerup-pierce.glb',
+  'powerup-fullfire': '/assets/models/powerup-fullfire.glb',
+  'exit-portal': '/assets/models/exit-portal.glb',
+  'falling-block': '/assets/models/falling-block.glb',
   'prop-pillar': '/assets/models/props/prop-pillar.glb',
   'prop-crystal': '/assets/models/props/prop-crystal.glb',
   'prop-terminal': '/assets/models/props/prop-terminal.glb',

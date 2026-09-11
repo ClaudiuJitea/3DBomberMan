@@ -30,6 +30,28 @@ export class UIManager {
   private kickValEl: HTMLElement | null;
   private kickMeterEl: HTMLElement | null;
 
+  private timerValEl: HTMLElement | null;
+  private timerBadgeEl: HTMLElement | null;
+  private hurryUpBannerEl: HTMLElement | null;
+  private bossBarEl: HTMLElement | null;
+  private bossHpValEl: HTMLElement | null;
+  private bossHpFillEl: HTMLElement | null;
+
+  private remoteValEl: HTMLElement | null;
+  private remoteMeterEl: HTMLElement | null;
+  private bombPassValEl: HTMLElement | null;
+  private bombPassMeterEl: HTMLElement | null;
+  private pierceValEl: HTMLElement | null;
+  private pierceMeterEl: HTMLElement | null;
+  private touchDetonateBtn: HTMLElement | null;
+
+  private cardKickEl: HTMLElement | null;
+  private cardShieldEl: HTMLElement | null;
+  private cardRemoteEl: HTMLElement | null;
+  private cardBombPassEl: HTMLElement | null;
+  private cardPierceEl: HTMLElement | null;
+  private powerupsDividerEl: HTMLElement | null;
+
   private pauseModal: HTMLElement;
   private winModal: HTMLElement;
   private lossModal: HTMLElement;
@@ -78,6 +100,28 @@ export class UIManager {
     this.hudLivesBadgeValEl = document.getElementById('hud-lives-badge-val');
     this.kickValEl = document.getElementById('stat-kick-val');
     this.kickMeterEl = document.getElementById('stat-kick-meter');
+
+    this.timerValEl = document.getElementById('hud-timer-val');
+    this.timerBadgeEl = document.getElementById('hud-timer-badge');
+    this.hurryUpBannerEl = document.getElementById('hud-hurryup-banner');
+    this.bossBarEl = document.getElementById('hud-boss-bar');
+    this.bossHpValEl = document.getElementById('boss-hp-val');
+    this.bossHpFillEl = document.getElementById('boss-hp-fill');
+
+    this.remoteValEl = document.getElementById('stat-remote-val');
+    this.remoteMeterEl = document.getElementById('stat-remote-meter');
+    this.bombPassValEl = document.getElementById('stat-bombpass-val');
+    this.bombPassMeterEl = document.getElementById('stat-bombpass-meter');
+    this.pierceValEl = document.getElementById('stat-pierce-val');
+    this.pierceMeterEl = document.getElementById('stat-pierce-meter');
+    this.touchDetonateBtn = document.getElementById('touch-detonate');
+
+    this.cardKickEl = document.getElementById('card-kick');
+    this.cardShieldEl = document.getElementById('card-shield');
+    this.cardRemoteEl = document.getElementById('card-remote');
+    this.cardBombPassEl = document.getElementById('card-bombpass');
+    this.cardPierceEl = document.getElementById('card-pierce');
+    this.powerupsDividerEl = document.getElementById('hud-powerups-divider');
 
     this.rangeMeterEl = document.getElementById('stat-range-meter');
     this.bombsMeterEl = document.getElementById('stat-bombs-meter');
@@ -194,6 +238,13 @@ export class UIManager {
         this.input.triggerTouchBomb();
       });
     }
+
+    if (this.touchDetonateBtn) {
+      this.touchDetonateBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.input.triggerTouchDetonate();
+      });
+    }
   }
 
   public setOnStartMode(cb: (mode: GameMode) => void): void {
@@ -283,7 +334,10 @@ export class UIManager {
     hasShield: boolean = false,
     lives: number = 3,
     maxLives: number = 5,
-    hasKick: boolean = false
+    hasKick: boolean = false,
+    hasRemote: boolean = false,
+    hasBombPass: boolean = false,
+    hasPierce: boolean = false
   ): void {
     if (this.livesValEl) this.livesValEl.textContent = `${lives}/${maxLives}`;
     if (this.hudLivesBadgeValEl) this.hudLivesBadgeValEl.textContent = `${lives}`;
@@ -304,43 +358,61 @@ export class UIManager {
     if (this.speedValEl) this.speedValEl.textContent = speed.toFixed(1);
     if (this.enemiesValEl) this.enemiesValEl.textContent = `${enemies}`;
 
+    // Dynamically toggle powerup cards: only visible when the player has that powerup!
+    this.cardKickEl?.classList.toggle('hidden', !hasKick);
+    this.cardShieldEl?.classList.toggle('hidden', !hasShield);
+    this.cardRemoteEl?.classList.toggle('hidden', !hasRemote);
+    this.cardBombPassEl?.classList.toggle('hidden', !hasBombPass);
+    this.cardPierceEl?.classList.toggle('hidden', !hasPierce);
+
+    const hasAnyPowerup = hasKick || hasShield || hasRemote || hasBombPass || hasPierce;
+    this.powerupsDividerEl?.classList.toggle('hidden', !hasAnyPowerup);
+
     if (this.kickValEl) {
-      this.kickValEl.textContent = hasKick ? 'READY' : 'OFF';
-      if (hasKick) {
-        this.kickValEl.classList.add('kick-active');
-      } else {
-        this.kickValEl.classList.remove('kick-active');
-      }
+      this.kickValEl.textContent = 'READY';
+      this.kickValEl.classList.add('kick-active');
     }
     if (this.kickMeterEl) {
-      const pips = this.kickMeterEl.querySelectorAll('.meter-pip');
-      pips.forEach((pip) => {
-        if (hasKick) {
-          pip.classList.add('active');
-        } else {
-          pip.classList.remove('active');
-        }
-      });
+      this.kickMeterEl.querySelectorAll('.meter-pip').forEach(p => p.classList.add('active'));
     }
 
     if (this.shieldValEl) {
-      this.shieldValEl.textContent = hasShield ? 'ACTIVE' : 'OFF';
-      if (hasShield) {
-        this.shieldValEl.classList.add('shield-active');
-      } else {
-        this.shieldValEl.classList.remove('shield-active');
-      }
+      this.shieldValEl.textContent = 'ACTIVE';
+      this.shieldValEl.classList.add('shield-active');
+    }
+    if (this.shieldMeterEl) {
+      this.shieldMeterEl.querySelectorAll('.meter-pip').forEach(p => p.classList.add('active'));
     }
 
-    if (this.shieldMeterEl) {
-      const pips = this.shieldMeterEl.querySelectorAll('.meter-pip');
-      pips.forEach((pip) => {
-        if (hasShield) {
-          pip.classList.add('active');
-        } else {
-          pip.classList.remove('active');
-        }
-      });
+    // Remote detonator status
+    if (this.remoteValEl) {
+      this.remoteValEl.textContent = 'READY';
+      this.remoteValEl.classList.add('remote-active');
+    }
+    if (this.remoteMeterEl) {
+      this.remoteMeterEl.querySelectorAll('.meter-pip').forEach(p => p.classList.add('active'));
+    }
+    if (this.touchDetonateBtn) {
+      if (hasRemote) this.touchDetonateBtn.classList.remove('hidden');
+      else this.touchDetonateBtn.classList.add('hidden');
+    }
+
+    // Bomb pass status
+    if (this.bombPassValEl) {
+      this.bombPassValEl.textContent = 'ACTIVE';
+      this.bombPassValEl.classList.add('bombpass-active');
+    }
+    if (this.bombPassMeterEl) {
+      this.bombPassMeterEl.querySelectorAll('.meter-pip').forEach(p => p.classList.add('active'));
+    }
+
+    // Pierce bomb status
+    if (this.pierceValEl) {
+      this.pierceValEl.textContent = 'ACTIVE';
+      this.pierceValEl.classList.add('pierce-active');
+    }
+    if (this.pierceMeterEl) {
+      this.pierceMeterEl.querySelectorAll('.meter-pip').forEach(p => p.classList.add('active'));
     }
 
     // Update segmented Blast Power meter pips (starts at 1 pip min, fills gradually to 7)
@@ -420,6 +492,18 @@ export class UIManager {
     } else if (type === 'BOMB_KICK') {
       cardId = 'card-kick';
       label = `BOMB KICK POWER-UP ONLINE [WALK INTO BOMBS TO SLIDE THEM]`;
+    } else if (type === 'REMOTE_CONTROL') {
+      cardId = 'card-remote';
+      label = `REMOTE DETONATOR ONLINE [PRESS 'E' TO TRIGGER]`;
+    } else if (type === 'BOMB_PASS') {
+      cardId = 'card-bombpass';
+      label = `BOMB PASS POWER-UP ACTIVE [WALK THROUGH BOMBS]`;
+    } else if (type === 'PIERCE_BOMB') {
+      cardId = 'card-pierce';
+      label = `PIERCE BOMB POWER-UP ONLINE [FLAME PENETRATES BLOCKS]`;
+    } else if (type === 'FULL_FIRE') {
+      cardId = 'card-blast-power';
+      label = `GOLDEN FLAME! MAXIMUM BLAST RANGE [7/7]`;
     }
 
     const card = document.getElementById(cardId);
@@ -588,5 +672,70 @@ export class UIManager {
     if (lossBadgeEl) lossBadgeEl.textContent = 'PLAYER SIGNAL LOST';
     if (lossTitleEl) lossTitleEl.textContent = 'BLASTED OUT';
     if (lossDescEl) lossDescEl.textContent = 'You were caught in the blast zone. Reset the grid and make the next fuse count.';
+  }
+
+  public updateTimer(seconds: number): void {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    if (this.timerValEl) {
+      this.timerValEl.textContent = formatted;
+    }
+    if (this.timerBadgeEl) {
+      if (seconds <= 45 && seconds > 0) {
+        this.timerBadgeEl.classList.add('hurry-up');
+      } else {
+        this.timerBadgeEl.classList.remove('hurry-up');
+      }
+    }
+  }
+
+  public showHurryUpBanner(): void {
+    if (this.hurryUpBannerEl) {
+      this.hurryUpBannerEl.classList.remove('hidden');
+      window.setTimeout(() => {
+        this.hurryUpBannerEl?.classList.add('hidden');
+      }, 3500);
+    }
+  }
+
+  public hideHurryUpBanner(): void {
+    if (this.hurryUpBannerEl) {
+      this.hurryUpBannerEl.classList.add('hidden');
+    }
+  }
+
+  public updateBossHealth(health: number, maxHealth: number): void {
+    if (this.bossBarEl) {
+      this.bossBarEl.classList.remove('hidden');
+    }
+    if (this.bossHpValEl) {
+      this.bossHpValEl.textContent = `${health}/${maxHealth} HP`;
+    }
+    if (this.bossHpFillEl) {
+      const pct = Math.max(0, Math.min(100, (health / maxHealth) * 100));
+      this.bossHpFillEl.style.width = `${pct}%`;
+    }
+  }
+
+  public hideBossHealth(): void {
+    if (this.bossBarEl) {
+      this.bossBarEl.classList.add('hidden');
+    }
+  }
+
+  public showNotification(message: string, durationMs: number = 2600): void {
+    if (this.upgradeBannerEl && this.upgradeTextEl) {
+      this.upgradeTextEl.textContent = message;
+      this.upgradeBannerEl.classList.remove('hidden');
+
+      if (this.bannerTimer !== null) {
+        window.clearTimeout(this.bannerTimer);
+      }
+      this.bannerTimer = window.setTimeout(() => {
+        this.upgradeBannerEl?.classList.add('hidden');
+        this.bannerTimer = null;
+      }, durationMs);
+    }
   }
 }

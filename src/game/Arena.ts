@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TileType, PowerUpType, GAME_CONFIG, StageDefinition, StageTheme, STAGE_DEFINITIONS } from './constants';
+import { TileType, PowerUpType, GAME_CONFIG, StageDefinition, StageTheme, STAGE_DEFINITIONS, FLOOR_HEIGHT } from './constants';
 import { Grid } from './Grid';
 import { AssetLoader } from './AssetLoader';
 import { PowerUp } from './PowerUp';
@@ -30,6 +30,13 @@ export class Arena {
   private props: THREE.Group[] = [];
   private powerups: PowerUp[] = [];
   private debrisList: DebrisParticle[] = [];
+
+  // Exit Portal (Classic Adventure)
+  public exitPortalMesh: THREE.Group | null = null;
+  public exitPortalPos: { col: number; row: number } | null = null;
+  public isExitPortalRevealed: boolean = false;
+  public isExitPortalActive: boolean = false;
+  private exitPortalBlockKey: string | null = null;
 
   constructor(scene: THREE.Scene, grid: Grid, assets: AssetLoader) {
     this.scene = scene;
@@ -96,6 +103,12 @@ export class Arena {
           this.blocks.set(`${c},${r}`, { col: c, row: r, mesh: blockMesh });
         }
       }
+    }
+
+    // Select one random block to hide the Exit Portal (Classic Adventure)
+    const blockKeys = Array.from(this.blocks.keys());
+    if (blockKeys.length > 0) {
+      this.exitPortalBlockKey = blockKeys[Math.floor(Math.random() * blockKeys.length)];
     }
 
     // 4. Place Decorative Props Outside the Arena Perimeter
@@ -168,6 +181,30 @@ export class Arena {
     // Spawn 3D debris burst
     this.spawnBlockDebris(col, row);
 
+    // Check if Exit Portal is revealed under this block (Classic Adventure)
+    if (key === this.exitPortalBlockKey && !this.isExitPortalRevealed) {
+      this.isExitPortalRevealed = true;
+      this.exitPortalPos = { col, row };
+      this.exitPortalMesh = this.assets.cloneModel('exit-portal');
+      this.exitPortalMesh.position.copy(this.grid.gridToWorld(col, row, FLOOR_HEIGHT));
+      this.scene.add(this.exitPortalMesh);
+      if (this.isExitPortalActive) {
+        this.exitPortalMesh.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const m = child as THREE.Mesh;
+            if (m.material) {
+              const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+              if ((mat as THREE.MeshStandardMaterial).emissive) {
+                (mat as THREE.MeshStandardMaterial).emissive.setHex(0x00ffff);
+                (mat as THREE.MeshStandardMaterial).emissiveIntensity = 5.0;
+              }
+            }
+          }
+        });
+      }
+      return; // Do not spawn a powerup on top of the exit portal
+    }
+
     // Roll for power-up spawn
     if (Math.random() < GAME_CONFIG.powerup.dropChance) {
       this.spawnPowerUp(col, row);
@@ -230,23 +267,39 @@ export class Arena {
   }
 
   private spawnPowerUp(col: number, row: number): void {
+    if (this.isExitPortalRevealed && this.exitPortalPos && this.exitPortalPos.col === col && this.exitPortalPos.row === row) {
+      return;
+    }
+
     const roll = Math.random();
     let type = PowerUpType.BOMB_COUNT;
     let modelKey = 'powerup-bomb';
 
-    if (roll < 0.25) {
+    if (roll < 0.17) {
       type = PowerUpType.BOMB_COUNT;
       modelKey = 'powerup-bomb';
-    } else if (roll < 0.50) {
+    } else if (roll < 0.34) {
       type = PowerUpType.BLAST_RANGE;
       modelKey = 'powerup-range';
-    } else if (roll < 0.70) {
+    } else if (roll < 0.48) {
       type = PowerUpType.SPEED;
       modelKey = 'powerup-speed';
-    } else if (roll < 0.82) {
+    } else if (roll < 0.58) {
       type = PowerUpType.BOMB_KICK;
       modelKey = 'powerup-kick';
-    } else if (roll < 0.92) {
+    } else if (roll < 0.67) {
+      type = PowerUpType.REMOTE_CONTROL;
+      modelKey = 'powerup-remote';
+    } else if (roll < 0.76) {
+      type = PowerUpType.BOMB_PASS;
+      modelKey = 'powerup-bombpass';
+    } else if (roll < 0.84) {
+      type = PowerUpType.PIERCE_BOMB;
+      modelKey = 'powerup-pierce';
+    } else if (roll < 0.89) {
+      type = PowerUpType.FULL_FIRE;
+      modelKey = 'powerup-fullfire';
+    } else if (roll < 0.95) {
       type = PowerUpType.SHIELD;
       modelKey = 'powerup-shield';
     } else {
@@ -261,12 +314,54 @@ export class Arena {
     this.powerups.push(p);
   }
 
+  public destroyPowerUpAt(col: number, row: number, audio?: any): boolean {
+    for (let i = this.powerups.length - 1; i >= 0; i--) {
+      const pu = this.powerups[i];
+      if (pu.col === col && pu.row === row) {
+        pu.dispose(this.scene);
+        this.powerups.splice(i, 1);
+        if (audio && audio.playPowerUpDestroyed) {
+          audio.playPowerUpDestroyed();
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public activateExitPortal(audio?: any): void {
+    if (this.isExitPortalActive) return;
+    this.isExitPortalActive = true;
+    if (audio && audio.playPortalActivate) {
+      audio.playPortalActivate();
+    }
+    if (this.exitPortalMesh) {
+      this.exitPortalMesh.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const m = child as THREE.Mesh;
+          if (m.material) {
+            const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+            if ((mat as THREE.MeshStandardMaterial).emissive) {
+              (mat as THREE.MeshStandardMaterial).emissive.setHex(0x00ffff);
+              (mat as THREE.MeshStandardMaterial).emissiveIntensity = 5.0;
+            }
+          }
+        }
+      });
+    }
+  }
+
   public update(
     delta: number,
     playerPos?: THREE.Vector3,
     onCollect?: (type: PowerUpType) => void,
     secondaryCollector?: { pos: THREE.Vector3; onCollect: (type: PowerUpType) => void }
   ): void {
+    // 0. Update exit portal animation
+    if (this.exitPortalMesh) {
+      this.exitPortalMesh.rotation.y += (this.isExitPortalActive ? 3.0 : 0.8) * delta;
+    }
+
     // 1. Update powerups
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const pu = this.powerups[i];
@@ -320,6 +415,15 @@ export class Arena {
     for (const p of this.props) this.scene.remove(p);
     for (const pu of this.powerups) pu.dispose(this.scene);
     for (const d of this.debrisList) this.scene.remove(d.mesh);
+
+    if (this.exitPortalMesh) {
+      this.scene.remove(this.exitPortalMesh);
+      this.exitPortalMesh = null;
+    }
+    this.isExitPortalRevealed = false;
+    this.isExitPortalActive = false;
+    this.exitPortalPos = null;
+    this.exitPortalBlockKey = null;
 
     this.floorTiles = [];
     this.solidWalls = [];

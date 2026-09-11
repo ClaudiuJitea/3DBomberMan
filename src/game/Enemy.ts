@@ -22,13 +22,23 @@ export class Enemy {
 
   public isAlive: boolean = true;
   public isDying: boolean = false;
+  public health: number = 1;
+  public maxHealth: number = 1;
+  private damageFlashTimer: number = 0;
   private deathTimer: number = 0;
   private deathModel: THREE.Group | null = null;
   private deathRocketModel: THREE.Group | null = null;
-  public deathVariant: 'cuckoo' | 'rocket' = 'cuckoo';
+  private deathBalloonModel: THREE.Group | null = null;
+  private deathSpringModel: THREE.Group | null = null;
+  public deathVariant: 'cuckoo' | 'rocket' | 'balloon' | 'spring' = 'cuckoo';
   private deathMixer: THREE.AnimationMixer | null = null;
   private deathAudioStage: number = 0;
   private livingModelChildren: THREE.Object3D[] = [];
+
+  public onCrushBlock?: (col: number, row: number) => void;
+  public onEatBomb?: (col: number, row: number) => void;
+  public getBombAt?: (col: number, row: number) => boolean;
+  public getNearestBomb?: (col: number, row: number) => GridCoord | null;
 
   private currentDir: GridCoord = { col: 0, row: 1 };
   private moveProgress: number = 0; // 0 to 1 between current cell and target cell
@@ -44,7 +54,15 @@ export class Enemy {
     grid: Grid,
     audio: AudioManager,
     deathModel?: THREE.Group,
-    deathRocketModel?: THREE.Group
+    deathRocketModel?: THREE.Group,
+    deathBalloonModel?: THREE.Group,
+    deathSpringModel?: THREE.Group,
+    callbacks?: {
+      onCrushBlock?: (col: number, row: number) => void;
+      onEatBomb?: (col: number, row: number) => void;
+      getBombAt?: (col: number, row: number) => boolean;
+      getNearestBomb?: (col: number, row: number) => GridCoord | null;
+    }
   ) {
     this.type = type;
     this.col = col;
@@ -54,6 +72,13 @@ export class Enemy {
     this.mesh = mesh;
     this.grid = grid;
     this.audio = audio;
+
+    if (callbacks) {
+      this.onCrushBlock = callbacks.onCrushBlock;
+      this.onEatBomb = callbacks.onEatBomb;
+      this.getBombAt = callbacks.getBombAt;
+      this.getNearestBomb = callbacks.getNearestBomb;
+    }
 
     // Track living mesh children so we can hide them when death model activates
     this.livingModelChildren = [...this.mesh.children];
@@ -88,11 +113,27 @@ export class Enemy {
       this.mesh.add(this.deathRocketModel);
     }
 
+    if (deathBalloonModel) {
+      this.deathBalloonModel = deathBalloonModel;
+      this.deathBalloonModel.visible = false;
+      this.mesh.add(this.deathBalloonModel);
+    }
+
+    if (deathSpringModel) {
+      this.deathSpringModel = deathSpringModel;
+      this.deathSpringModel.visible = false;
+      this.mesh.add(this.deathSpringModel);
+    }
+
     // Randomly select between the hilarious death animations
-    if (deathModel && deathRocketModel) {
-      this.deathVariant = Math.random() < 0.5 ? 'cuckoo' : 'rocket';
-    } else if (deathRocketModel) {
-      this.deathVariant = 'rocket';
+    const availableVariants: ('cuckoo' | 'rocket' | 'balloon' | 'spring')[] = [];
+    if (deathModel) availableVariants.push('cuckoo');
+    if (deathRocketModel) availableVariants.push('rocket');
+    if (deathBalloonModel) availableVariants.push('balloon');
+    if (deathSpringModel) availableVariants.push('spring');
+
+    if (availableVariants.length > 0) {
+      this.deathVariant = availableVariants[Math.floor(Math.random() * availableVariants.length)];
     } else {
       this.deathVariant = 'cuckoo';
     }
@@ -105,6 +146,15 @@ export class Enemy {
       this.speed = GAME_CONFIG.enemies.blitzSpeed;
     } else if (type === EnemyType.PHANTOM) {
       this.speed = GAME_CONFIG.enemies.phantomSpeed;
+    } else if (type === EnemyType.CRUSHER) {
+      this.speed = GAME_CONFIG.enemies.crusherSpeed;
+    } else if (type === EnemyType.CHOMPER) {
+      this.speed = GAME_CONFIG.enemies.chomperSpeed;
+    } else if (type === EnemyType.BOSS) {
+      this.health = GAME_CONFIG.enemies.bossHealth;
+      this.maxHealth = GAME_CONFIG.enemies.bossHealth;
+      this.speed = GAME_CONFIG.enemies.bossSpeed;
+      this.mesh.scale.set(1.45, 1.45, 1.45);
     } else {
       this.speed = GAME_CONFIG.enemies.scoutSpeed;
     }
@@ -133,6 +183,25 @@ export class Enemy {
 
     this.animTimer += delta;
 
+    if (this.damageFlashTimer > 0) {
+      this.damageFlashTimer -= delta;
+      if (this.damageFlashTimer <= 0) {
+        this.mesh.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const m = child as THREE.Mesh;
+            const mats = Array.isArray(m.material) ? m.material : [m.material];
+            for (const mat of mats) {
+              const std = mat as THREE.MeshStandardMaterial;
+              if (std && std.emissive) {
+                std.emissive.setHex(0x000000);
+                std.emissiveIntensity = 0;
+              }
+            }
+          }
+        });
+      }
+    }
+
     // Smooth organic hover floating according to enemy archetype
     if (this.type === EnemyType.SCOUT) {
       this.mesh.position.y = FLOOR_HEIGHT + 0.16 + Math.sin(this.animTimer * 3.2) * 0.06;
@@ -150,6 +219,89 @@ export class Enemy {
       this.mesh.position.y = FLOOR_HEIGHT + 0.24 + Math.sin(this.animTimer * 2.2) * 0.10;
       this.mesh.rotation.x = Math.sin(this.animTimer * 1.8) * 0.06;
       this.mesh.rotation.z = Math.sin(this.animTimer * 2.6) * 0.08;
+    } else if (this.type === EnemyType.CRUSHER) {
+      this.mesh.position.y = FLOOR_HEIGHT + 0.12 + Math.abs(Math.sin(this.animTimer * 6.0)) * 0.07;
+      this.mesh.rotation.x = Math.sin(this.animTimer * 6.0) * 0.06;
+      this.mesh.rotation.z = Math.sin(this.animTimer * 3.0) * 0.04;
+    } else if (this.type === EnemyType.CHOMPER) {
+      this.mesh.position.y = FLOOR_HEIGHT + 0.20 + Math.sin(this.animTimer * 5.5) * 0.06;
+      this.mesh.rotation.x = 0.16 + Math.sin(this.animTimer * 7.0) * 0.08;
+      this.mesh.rotation.z = Math.sin(this.animTimer * 4.0) * 0.06;
+    } else if (this.type === EnemyType.BOSS) {
+      this.mesh.position.y = FLOOR_HEIGHT + 0.22 + Math.sin(this.animTimer * 5.0) * 0.03;
+      this.mesh.rotation.x = 0;
+      this.mesh.rotation.z = Math.sin(this.animTimer * 2.5) * 0.05;
+    }
+
+    // Mid-step checks for Crusher block smashing and Chomper bomb eating
+    if (this.type === EnemyType.CRUSHER && this.moveProgress >= 0.35) {
+      if (this.grid.getTile(this.targetCol, this.targetRow) === TileType.BLOCK) {
+        this.onCrushBlock?.(this.targetCol, this.targetRow);
+      }
+    }
+    if (this.type === EnemyType.CHOMPER && this.moveProgress >= 0.30) {
+      if (this.grid.getTile(this.targetCol, this.targetRow) === TileType.BOMB || (this.getBombAt && this.getBombAt(this.targetCol, this.targetRow))) {
+        this.onEatBomb?.(this.targetCol, this.targetRow);
+      }
+    }
+
+    // Bomb blocker check for all non-Chomper enemies:
+    // If target tile currently has a bomb, enemy CANNOT enter it!
+    const isTargetBomb = (this.type !== EnemyType.CHOMPER) && (
+      this.grid.getTile(this.targetCol, this.targetRow) === TileType.BOMB ||
+      (this.getBombAt ? this.getBombAt(this.targetCol, this.targetRow) : false)
+    );
+
+    if (isTargetBomb && (this.targetCol !== this.col || this.targetRow !== this.row)) {
+      // Rebound/turn around immediately away from the bomb!
+      const safeCol = this.col;
+      const safeRow = this.row;
+      const blockedCol = this.targetCol;
+      const blockedRow = this.targetRow;
+
+      this.col = blockedCol;
+      this.row = blockedRow;
+      this.targetCol = safeCol;
+      this.targetRow = safeRow;
+
+      this.startWorldPos.copy(this.grid.gridToWorld(blockedCol, blockedRow, FLOOR_HEIGHT));
+      this.targetWorldPos.copy(this.grid.gridToWorld(safeCol, safeRow, FLOOR_HEIGHT));
+
+      // Clamp progress to prevent penetrating into bomb tile (at most 0.30)
+      const clampedProgress = Math.min(0.30, this.moveProgress);
+      this.moveProgress = Math.max(0.70, 1.0 - clampedProgress);
+      this.currentDir = { col: safeCol - blockedCol, row: safeRow - blockedRow };
+      this.mesh.position.lerpVectors(this.startWorldPos, this.targetWorldPos, this.moveProgress);
+    }
+
+    // If enemy somehow ended up stationary on a bomb tile, push it off immediately
+    if (this.type !== EnemyType.CHOMPER) {
+      const isCurrentTileBomb = this.grid.getTile(this.col, this.row) === TileType.BOMB ||
+        (this.getBombAt ? this.getBombAt(this.col, this.row) : false);
+
+      if (isCurrentTileBomb && this.moveProgress >= 1.0) {
+        const cardinal: GridCoord[] = [
+          { col: -this.currentDir.col, row: -this.currentDir.row },
+          { col: 1, row: 0 },
+          { col: -1, row: 0 },
+          { col: 0, row: 1 },
+          { col: 0, row: -1 },
+        ];
+        for (const dir of cardinal) {
+          const nc = this.col + dir.col;
+          const nr = this.row + dir.row;
+          if (this.grid.isWalkable(nc, nr)) {
+            this.targetCol = nc;
+            this.targetRow = nr;
+            this.currentDir = dir;
+            this.moveProgress = 0.5;
+            this.startWorldPos.copy(this.grid.gridToWorld(this.col, this.row, FLOOR_HEIGHT));
+            this.targetWorldPos.copy(this.grid.gridToWorld(nc, nr, FLOOR_HEIGHT));
+            this.mesh.position.lerpVectors(this.startWorldPos, this.targetWorldPos, this.moveProgress);
+            break;
+          }
+        }
+      }
     }
 
     // Grid step progression
@@ -177,6 +329,17 @@ export class Enemy {
     if (this.moveProgress >= 1.0) {
       this.col = this.targetCol;
       this.row = this.targetRow;
+
+      if (this.type === EnemyType.CRUSHER && this.grid.getTile(this.col, this.row) === TileType.BLOCK) {
+        this.onCrushBlock?.(this.col, this.row);
+      }
+
+      if (this.type === EnemyType.CHOMPER) {
+        if (this.grid.getTile(this.col, this.row) === TileType.BOMB || (this.getBombAt && this.getBombAt(this.col, this.row))) {
+          this.onEatBomb?.(this.col, this.row);
+        }
+      }
+
       this.pickNextTarget(playerCoord);
     }
   }
@@ -191,13 +354,24 @@ export class Enemy {
     ];
 
     const isPhantom = this.type === EnemyType.PHANTOM;
+    const isCrusher = this.type === EnemyType.CRUSHER;
+    const isChomper = this.type === EnemyType.CHOMPER;
 
     for (const dir of cardinal) {
       const nextC = this.col + dir.col;
       const nextR = this.row + dir.row;
-      const canPass = isPhantom
-        ? (this.grid.isWalkable(nextC, nextR) || this.grid.getTile(nextC, nextR) === TileType.BLOCK)
-        : this.grid.isWalkable(nextC, nextR);
+
+      let canPass = false;
+      if (isPhantom || isCrusher) {
+        canPass = (this.grid.isWalkable(nextC, nextR) || this.grid.getTile(nextC, nextR) === TileType.BLOCK) &&
+                  this.grid.getTile(nextC, nextR) !== TileType.BOMB;
+      } else if (isChomper) {
+        canPass = this.grid.isWalkable(nextC, nextR, true);
+      } else {
+        const isBomb = this.grid.getTile(nextC, nextR) === TileType.BOMB ||
+          (this.getBombAt ? this.getBombAt(nextC, nextR) : false);
+        canPass = this.grid.isWalkable(nextC, nextR) && !isBomb;
+      }
 
       if (canPass && !this.grid.hasFire(nextC, nextR)) {
         validMoves.push(dir);
@@ -212,12 +386,16 @@ export class Enemy {
 
     let chosenDir: GridCoord;
 
-    if (this.type === EnemyType.HUNTER) {
+    if (this.type === EnemyType.HUNTER || this.type === EnemyType.BOSS) {
       chosenDir = this.chooseHunterDirection(validMoves, playerCoord);
     } else if (this.type === EnemyType.BLITZ) {
       chosenDir = this.chooseBlitzDirection(validMoves);
     } else if (this.type === EnemyType.PHANTOM) {
       chosenDir = this.choosePhantomDirection(validMoves, playerCoord);
+    } else if (this.type === EnemyType.CRUSHER) {
+      chosenDir = this.chooseCrusherDirection(validMoves, playerCoord);
+    } else if (this.type === EnemyType.CHOMPER) {
+      chosenDir = this.chooseChomperDirection(validMoves, playerCoord);
     } else {
       chosenDir = this.chooseScoutDirection(validMoves);
     }
@@ -228,6 +406,68 @@ export class Enemy {
     this.moveProgress = 0;
     this.startWorldPos.copy(this.grid.gridToWorld(this.col, this.row, 0));
     this.targetWorldPos.copy(this.grid.gridToWorld(this.targetCol, this.targetRow, 0));
+  }
+
+  private chooseCrusherDirection(validMoves: GridCoord[], player: GridCoord): GridCoord {
+    // Crusher loves to charge straight ahead (70% momentum) smashing anything in front of it
+    const keepSame = validMoves.find(
+      d => d.col === this.currentDir.col && d.row === this.currentDir.row
+    );
+    if (keepSame && Math.random() < 0.70) {
+      return keepSame;
+    }
+
+    // Otherwise, it homes in on the player's position, carving a path through blocks
+    if (Math.random() < 0.75) {
+      let bestDir = validMoves[0];
+      let minDistance = Infinity;
+      for (const dir of validMoves) {
+        const nextC = this.col + dir.col;
+        const nextR = this.row + dir.row;
+        const dist = Math.abs(nextC - player.col) + Math.abs(nextR - player.row);
+        if (dist < minDistance) {
+          minDistance = dist;
+          bestDir = dir;
+        }
+      }
+      return bestDir;
+    }
+
+    return validMoves[Math.floor(Math.random() * validMoves.length)];
+  }
+
+  private chooseChomperDirection(validMoves: GridCoord[], player: GridCoord): GridCoord {
+    // 1. If any adjacent cell has a bomb, IMMEDIATELY CHOMP IT!
+    for (const dir of validMoves) {
+      const nextC = this.col + dir.col;
+      const nextR = this.row + dir.row;
+      if (this.grid.getTile(nextC, nextR) === TileType.BOMB || (this.getBombAt && this.getBombAt(nextC, nextR))) {
+        return dir;
+      }
+    }
+
+    // 2. Check if there's any active bomb on the map
+    const nearestBomb = this.getNearestBomb ? this.getNearestBomb(this.col, this.row) : null;
+    if (nearestBomb) {
+      // 85% bias towards the nearest bomb
+      if (Math.random() < 0.85) {
+        let bestDir = validMoves[0];
+        let minDist = Infinity;
+        for (const dir of validMoves) {
+          const nextC = this.col + dir.col;
+          const nextR = this.row + dir.row;
+          const dist = Math.abs(nextC - nearestBomb.col) + Math.abs(nextR - nearestBomb.row);
+          if (dist < minDist) {
+            minDist = dist;
+            bestDir = dir;
+          }
+        }
+        return bestDir;
+      }
+    }
+
+    // 3. If no bombs, Chomper acts as an agile aggressive hunter
+    return this.chooseHunterDirection(validMoves, player);
   }
 
   private chooseScoutDirection(validMoves: GridCoord[]): GridCoord {
@@ -338,14 +578,48 @@ export class Enemy {
 
   public kill(): void {
     if (this.isDying || !this.isAlive) return;
+
+    if (this.type === EnemyType.BOSS && this.health > 1) {
+      this.health--;
+      this.audio.playBossHit();
+      this.speed += 0.8;
+      this.damageFlashTimer = 0.45;
+      this.mesh.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const m = child as THREE.Mesh;
+          const mats = Array.isArray(m.material) ? m.material : [m.material];
+          for (const mat of mats) {
+            const std = mat as THREE.MeshStandardMaterial;
+            if (std && std.emissive) {
+              std.emissive.setHex(0xff2222);
+              std.emissiveIntensity = 5.0;
+            }
+          }
+        }
+      });
+      return;
+    }
+
+    if (this.type === EnemyType.BOSS) {
+      this.health = 0;
+      this.audio.playBossRoar();
+    }
+
     this.isDying = true;
     this.isAlive = false;
     this.deathTimer = 0;
     this.deathAudioStage = 0;
 
-    const chosenDeathModel = (this.deathVariant === 'rocket' && this.deathRocketModel)
-      ? this.deathRocketModel
-      : (this.deathModel || this.deathRocketModel);
+    let chosenDeathModel: THREE.Group | null = null;
+    if (this.deathVariant === 'spring' && this.deathSpringModel) {
+      chosenDeathModel = this.deathSpringModel;
+    } else if (this.deathVariant === 'balloon' && this.deathBalloonModel) {
+      chosenDeathModel = this.deathBalloonModel;
+    } else if (this.deathVariant === 'rocket' && this.deathRocketModel) {
+      chosenDeathModel = this.deathRocketModel;
+    } else {
+      chosenDeathModel = this.deathModel || this.deathRocketModel || this.deathBalloonModel || this.deathSpringModel;
+    }
 
     if (chosenDeathModel) {
       // Hide living model meshes
@@ -369,7 +643,11 @@ export class Enemy {
         }
       }
 
-      if (this.deathVariant === 'rocket') {
+      if (this.deathVariant === 'spring') {
+        this.audio.playEnemySpringDeath(0);
+      } else if (this.deathVariant === 'balloon') {
+        this.audio.playEnemyBalloonDeath(0);
+      } else if (this.deathVariant === 'rocket') {
         this.audio.playEnemyRocketDeath(0);
       } else {
         this.audio.playEnemyRobotDeath(0);
@@ -385,7 +663,39 @@ export class Enemy {
     if (this.deathMixer) {
       this.deathMixer.update(delta);
 
-      if (this.deathVariant === 'rocket') {
+      if (this.deathVariant === 'spring') {
+        // Stage 1: Whirring spinning rotor in air at ~0.70s
+        if (this.deathTimer >= 0.70 && this.deathAudioStage === 0) {
+          this.deathAudioStage = 1;
+          this.audio.playEnemySpringDeath(1);
+        }
+        // Stage 2: Accordion squash metal recoil at ~1.60s
+        else if (this.deathTimer >= 1.60 && this.deathAudioStage === 1) {
+          this.deathAudioStage = 2;
+          this.audio.playEnemySpringDeath(2);
+        }
+        // Stage 3: Slide whistle plunge + surrender flag honk at ~2.10s
+        else if (this.deathTimer >= 2.10 && this.deathAudioStage === 2) {
+          this.deathAudioStage = 3;
+          this.audio.playEnemySpringDeath(3);
+        }
+      } else if (this.deathVariant === 'balloon') {
+        // Stage 1: Rubbery wobble creak stretch at ~0.80s
+        if (this.deathTimer >= 0.80 && this.deathAudioStage === 0) {
+          this.deathAudioStage = 1;
+          this.audio.playEnemyBalloonDeath(1);
+        }
+        // Stage 2: Violent balloon POP! + horn tweet at ~1.65s
+        else if (this.deathTimer >= 1.65 && this.deathAudioStage === 1) {
+          this.deathAudioStage = 2;
+          this.audio.playEnemyBalloonDeath(2);
+        }
+        // Stage 3: Dizzy stars chirping at ~2.15s
+        else if (this.deathTimer >= 2.15 && this.deathAudioStage === 2) {
+          this.deathAudioStage = 3;
+          this.audio.playEnemyBalloonDeath(3);
+        }
+      } else if (this.deathVariant === 'rocket') {
         // Rocket Death Stages:
         // Stage 1: Screaming bottle rocket pinwheel whirl at ~0.70s
         if (this.deathTimer >= 0.70 && this.deathAudioStage === 0) {

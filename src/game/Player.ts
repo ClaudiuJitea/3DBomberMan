@@ -45,6 +45,9 @@ export class Player {
   public blastRange: number;
   public lives: number = GAME_CONFIG.player.initialLives;
   public hasKick: boolean = false;
+  public hasRemote: boolean = false;
+  public hasBombPass: boolean = false;
+  public hasPierce: boolean = false;
   public onKickBomb?: (targetCol: number, targetRow: number, dirX: number, dirZ: number) => boolean;
 
   // State
@@ -593,7 +596,8 @@ export class Player {
         }
       }
 
-      const isTargetWalkable = this.grid.isWalkable(targetCol, row, this.activeBombTile || undefined);
+      const allowBomb = this.hasBombPass ? true : (this.activeBombTile || undefined);
+      const isTargetWalkable = this.grid.isWalkable(targetCol, row, allowBomb);
 
       const nextX = this.mesh.position.x + input.x * moveDist;
       const barrierX = cellCenter.x + (input.x > 0 ? (CELL_SIZE / 2 - collisionRadius) : (-CELL_SIZE / 2 + collisionRadius));
@@ -621,7 +625,8 @@ export class Player {
         }
       }
 
-      const isTargetWalkable = this.grid.isWalkable(col, targetRow, this.activeBombTile || undefined);
+      const allowBombZ = this.hasBombPass ? true : (this.activeBombTile || undefined);
+      const isTargetWalkable = this.grid.isWalkable(col, targetRow, allowBombZ);
 
       const nextZ = this.mesh.position.z + input.z * moveDist;
       const barrierZ = cellCenter.z + (input.z > 0 ? (CELL_SIZE / 2 - collisionRadius) : (-CELL_SIZE / 2 + collisionRadius));
@@ -715,6 +720,22 @@ export class Player {
       case PowerUpType.BOMB_KICK:
         this.hasKick = true;
         this.audio.playKickPowerUp();
+        break;
+      case PowerUpType.REMOTE_CONTROL:
+        this.hasRemote = true;
+        this.audio.playPowerUp();
+        break;
+      case PowerUpType.BOMB_PASS:
+        this.hasBombPass = true;
+        this.audio.playPowerUp();
+        break;
+      case PowerUpType.PIERCE_BOMB:
+        this.hasPierce = true;
+        this.audio.playPowerUp();
+        break;
+      case PowerUpType.FULL_FIRE:
+        this.blastRange = GAME_CONFIG.player.maxRange;
+        this.audio.playPowerUp();
         break;
     }
   }
@@ -1012,6 +1033,9 @@ export class Player {
     this.blastRange = GAME_CONFIG.player.initialRange;
     this.lives = GAME_CONFIG.player.initialLives;
     this.hasKick = false;
+    this.hasRemote = false;
+    this.hasBombPass = false;
+    this.hasPierce = false;
     this.isAlive = true;
     this.isDying = false;
     this.deathTimer = 0;
