@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GRID_COLS, GRID_ROWS, CELL_SIZE, GameState, GameMode, EnemyType, TileType, PowerUpType, DeathType, StageDefinition, STAGE_DEFINITIONS } from './constants';
+import { GRID_COLS, GRID_ROWS, CELL_SIZE, GameState, GameMode, EnemyType, TileType, PowerUpType, DeathType, StageDefinition, STAGE_DEFINITIONS, GAME_CONFIG } from './constants';
 import { Grid } from './Grid';
 import { AssetLoader } from './AssetLoader';
 import { AudioManager } from './AudioManager';
@@ -51,12 +51,15 @@ export class Game {
   private cameraShakeIntensity: number = 0;
   private isLoopRunning: boolean = false;
   private hasShownLossModal: boolean = false;
+  private modalInputCooldown: number = 0;
 
   private currentStageIndex: number = 0;
   private savedPlayerStats = {
     maxBombs: 1,
     blastRange: 1,
     speed: 4.8,
+    lives: GAME_CONFIG.player.initialLives,
+    hasKick: false,
   };
 
   constructor(container: HTMLElement) {
@@ -183,6 +186,7 @@ export class Game {
     // 1. Spawn Player 1 (Cyan) at (1, 1)
     const p1Mesh = this.assets.cloneModel('player');
     this.player = new Player(1, 1, p1Mesh, this.grid, this.audio, this.scene, this.assets, false);
+    this.bindPlayerCallbacks(this.player);
 
     // 2. Spawn Rival Bot (Crimson Obsidian) at (cols - 2, rows - 2)
     const rivalMesh = this.assets.cloneModel('player-rival');
@@ -196,6 +200,7 @@ export class Game {
       this.assets,
       true
     );
+    this.bindPlayerCallbacks(this.player2);
 
     // 3. Spawn Small Robot Enemies
     this.spawnEnemiesForVsCpu(stageDef);
@@ -219,6 +224,7 @@ export class Game {
     this.cameraShakeIntensity = 0;
     this.resetCamera();
     this.hasShownLossModal = false;
+    this.modalInputCooldown = 0;
     this.state = GameState.PLAYING;
     this.ui.updateStageDisplay(1, 'VS COMPUTER', 'cyber');
     this.ui.showStateModal(GameState.PLAYING);
@@ -233,6 +239,7 @@ export class Game {
     // 1. Spawn Player 1 (Cyan) at (1, 1)
     const p1Mesh = this.assets.cloneModel('player');
     this.player = new Player(1, 1, p1Mesh, this.grid, this.audio, this.scene, this.assets, false);
+    this.bindPlayerCallbacks(this.player);
 
     // 2. Spawn Player 2 (Crimson) at (cols - 2, rows - 2)
     const p2Mesh = this.assets.cloneModel('player-rival');
@@ -246,11 +253,13 @@ export class Game {
       this.assets,
       true
     );
+    this.bindPlayerCallbacks(this.player2);
 
     this.rivalAI = null;
     this.cameraShakeIntensity = 0;
     this.resetCamera();
     this.hasShownLossModal = false;
+    this.modalInputCooldown = 0;
     this.state = GameState.PLAYING;
     this.ui.updateStageDisplay(1, 'LOCAL SHOWDOWN', 'cyber');
     this.ui.showStateModal(GameState.PLAYING);
@@ -290,16 +299,21 @@ export class Game {
     // 4. Spawn Player at (1, 1)
     const playerMesh = this.assets.cloneModel('player');
     this.player = new Player(1, 1, playerMesh, this.grid, this.audio, this.scene, this.assets);
+    this.bindPlayerCallbacks(this.player);
 
     if (carryOverStats) {
       this.player.maxBombs = this.savedPlayerStats.maxBombs;
       this.player.blastRange = this.savedPlayerStats.blastRange;
       this.player.speed = this.savedPlayerStats.speed;
+      this.player.lives = this.savedPlayerStats.lives;
+      this.player.hasKick = this.savedPlayerStats.hasKick;
     } else {
       this.savedPlayerStats = {
         maxBombs: 1,
         blastRange: 1,
         speed: 4.8,
+        lives: GAME_CONFIG.player.initialLives,
+        hasKick: false,
       };
     }
 
@@ -310,9 +324,88 @@ export class Game {
     this.cameraShakeIntensity = 0;
     this.resetCamera();
     this.hasShownLossModal = false;
+    this.modalInputCooldown = 0;
     this.state = GameState.PLAYING;
     this.ui.updateStageDisplay(stageDef.id, stageDef.name, stageDef.theme);
     this.ui.showStateModal(GameState.PLAYING);
+  }
+
+  private bindPlayerCallbacks(player: Player): void {
+    player.onKickBomb = (bombCol: number, bombRow: number, dirX: number, dirZ: number): boolean => {
+      const bomb = this.bombs.find(b => b.col === bombCol && b.row === bombRow && !b.isDetonated);
+      if (bomb) {
+        return bomb.kick(dirX, dirZ, this.grid);
+      }
+      return false;
+    };
+  }
+
+  private findSafeSpawnPosition(targetCol: number = 1, targetRow: number = 1): { col: number; row: number } {
+    const defaultCol = targetCol;
+    const defaultRow = targetRow;
+
+    // Check cells in expanding Manhattan distance from (defaultCol, defaultRow)
+    const queue: Array<{ col: number; row: number }> = [{ col: defaultCol, row: defaultRow }];
+    const visited = new Set<string>();
+    visited.add(`${defaultCol},${defaultRow}`);
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const { col, row } = current;
+
+      const isWalkable = this.grid.isInBounds(col, row) && this.grid.getTile(col, row) === TileType.EMPTY;
+      const hasFire = this.grid.hasFire(col, row);
+
+      // Check distance to enemies
+      let dangerNearby = false;
+      for (const enemy of this.enemies) {
+        if (enemy.isAlive && !enemy.isDying) {
+          const dist = Math.abs(enemy.col - col) + Math.abs(enemy.row - row);
+          if (dist <= 1.5) {
+            dangerNearby = true;
+            break;
+          }
+        }
+      }
+
+      // Check distance to other player
+      const otherPlayer = (targetCol === 1 && targetRow === 1) ? this.player2 : this.player;
+      if (otherPlayer && otherPlayer.isAlive && !otherPlayer.isDying) {
+        const otherCoords = otherPlayer.getGridCoords();
+        if (Math.abs(otherCoords.col - col) + Math.abs(otherCoords.row - row) <= 1.0) {
+          dangerNearby = true;
+        }
+      }
+
+      // Check unexploded bombs
+      for (const bomb of this.bombs) {
+        if (!bomb.isDetonated && bomb.col === col && bomb.row === row) {
+          dangerNearby = true;
+          break;
+        }
+      }
+
+      if (isWalkable && !hasFire && !dangerNearby) {
+        return { col, row };
+      }
+
+      // Add neighbors
+      const neighbors = [
+        { col: col + 1, row },
+        { col: col - 1, row },
+        { col, row: row + 1 },
+        { col, row: row - 1 },
+      ];
+      for (const n of neighbors) {
+        const key = `${n.col},${n.row}`;
+        if (this.grid.isInBounds(n.col, n.row) && !visited.has(key)) {
+          visited.add(key);
+          queue.push(n);
+        }
+      }
+    }
+
+    return { col: defaultCol, row: defaultRow };
   }
 
   private nextStage(): void {
@@ -321,16 +414,26 @@ export class Game {
         maxBombs: this.player.maxBombs,
         blastRange: this.player.blastRange,
         speed: this.player.speed,
+        lives: this.player.lives,
+        hasKick: this.player.hasKick,
       };
     }
     this.startStage(this.currentStageIndex + 1, true);
   }
 
   private retryStage(): void {
+    this.savedPlayerStats.lives = GAME_CONFIG.player.initialLives;
     this.startStage(this.currentStageIndex, true);
   }
 
   private restartCampaign(): void {
+    this.savedPlayerStats = {
+      maxBombs: 1,
+      blastRange: 1,
+      speed: 4.8,
+      lives: GAME_CONFIG.player.initialLives,
+      hasKick: false,
+    };
     this.startStage(0, false);
   }
 
@@ -479,7 +582,14 @@ export class Game {
     }
 
     // Restart / Progression toggle
-    if (this.input.consumeRestart()) {
+    const canAcceptModalInput = (this.state === GameState.LOST || this.state === GameState.WON) &&
+      this.hasShownLossModal &&
+      this.modalInputCooldown <= 0;
+
+    const restartRequested = (this.state === GameState.PLAYING && this.input.consumeRestart()) ||
+      (canAcceptModalInput && (this.input.consumeRestart() || this.input.consumeMenuSelect()));
+
+    if (restartRequested) {
       if (this.currentMode === GameMode.CLASSIC) {
         if (this.state === GameState.WON) {
           if (this.currentStageIndex < STAGE_DEFINITIONS.length - 1) {
@@ -595,6 +705,10 @@ export class Game {
   }
 
   private update(delta: number): void {
+    if (this.modalInputCooldown > 0) {
+      this.modalInputCooldown = Math.max(0, this.modalInputCooldown - delta);
+    }
+
     this.handleInput();
 
     if (this.state === GameState.MENU) {
@@ -638,9 +752,6 @@ export class Game {
         const pGrid = this.player.getGridCoords();
         if (this.grid.hasFire(pGrid.col, pGrid.row)) {
           this.player.kill(DeathType.FIRE);
-          if (this.currentMode === GameMode.CLASSIC && !this.player.isAlive) {
-            this.state = GameState.LOST;
-          }
         }
       }
     }
@@ -669,7 +780,25 @@ export class Game {
     // 4. Update Bombs
     for (let i = this.bombs.length - 1; i >= 0; i--) {
       const bomb = this.bombs[i];
-      const exploded = bomb.update(delta, this.scene);
+      const exploded = bomb.update(
+        delta,
+        this.scene,
+        this.grid,
+        (c: number, r: number) => {
+          for (const enemy of this.enemies) {
+            if (enemy.isAlive && !enemy.isDying && enemy.col === c && enemy.row === r) {
+              return true;
+            }
+          }
+          if (this.player2 && this.player2.isAlive) {
+            const p2Coords = this.player2.getGridCoords();
+            if (p2Coords.col === c && p2Coords.row === r) {
+              return true;
+            }
+          }
+          return false;
+        }
+      );
       if (exploded) {
         this.bombs.splice(i, 1);
         this.detonateBomb(bomb);
@@ -691,7 +820,7 @@ export class Game {
       onCollect: (type: PowerUpType) => {
         if (this.player2) {
           this.player2.applyPowerUp(type);
-          if (type !== PowerUpType.SHIELD) {
+          if (type !== PowerUpType.SHIELD && type !== PowerUpType.EXTRA_LIFE && type !== PowerUpType.BOMB_KICK) {
             this.audio.playPowerUp();
           }
         }
@@ -700,15 +829,21 @@ export class Game {
 
     this.arena.update(
       delta,
-      this.player?.position,
+      (this.player && this.player.isAlive) ? this.player.position : undefined,
       (type: PowerUpType) => {
         if (this.player) {
           this.player.applyPowerUp(type);
-          if (type !== PowerUpType.SHIELD) {
+          if (type !== PowerUpType.SHIELD && type !== PowerUpType.EXTRA_LIFE && type !== PowerUpType.BOMB_KICK) {
             this.audio.playPowerUp();
           }
-          const maxVal = (type === PowerUpType.BLAST_RANGE) ? 7 : (type === PowerUpType.BOMB_COUNT ? 6 : (type === PowerUpType.SHIELD ? 1 : 6));
-          const curVal = (type === PowerUpType.BLAST_RANGE) ? this.player.blastRange : (type === PowerUpType.BOMB_COUNT ? this.player.maxBombs : (type === PowerUpType.SHIELD ? 1 : Math.round((this.player.speed - 4.8) / 0.8) + 1));
+          const maxVal = (type === PowerUpType.BLAST_RANGE) ? 7 : (type === PowerUpType.BOMB_COUNT ? 6 : (type === PowerUpType.SHIELD ? 1 : (type === PowerUpType.EXTRA_LIFE ? GAME_CONFIG.player.maxLives : 1)));
+          let curVal = 0;
+          if (type === PowerUpType.BLAST_RANGE) curVal = this.player.blastRange;
+          else if (type === PowerUpType.BOMB_COUNT) curVal = this.player.maxBombs;
+          else if (type === PowerUpType.SHIELD) curVal = 1;
+          else if (type === PowerUpType.EXTRA_LIFE) curVal = this.player.lives;
+          else if (type === PowerUpType.BOMB_KICK) curVal = 1;
+          else curVal = Math.round((this.player.speed - 4.8) / 0.8) + 1;
           this.ui.triggerPowerUpFeedback(type, curVal, maxVal);
         }
       },
@@ -750,9 +885,6 @@ export class Game {
             if (dx1 * dx1 + dz1 * dz1 < 0.95) {
               const hadShield = this.player!.hasShield;
               this.player!.kill(DeathType.ENEMY);
-              if (this.currentMode === GameMode.CLASSIC && !this.player!.isAlive) {
-                this.state = GameState.LOST;
-              }
               if (hadShield && this.player!.isAlive) {
                 // Shield kinetic discharge vaporizes the attacking robot
                 enemy.kill();
@@ -782,75 +914,175 @@ export class Game {
 
     // 8. Victory / Defeat Check per Mode
     if (this.currentMode === GameMode.CLASSIC) {
-      // Classic Mode Win
-      if (this.state === GameState.PLAYING && activeEnemiesCount === 0 && this.enemies.length === 0) {
+      // Classic Mode Win (only if player is still alive and not dying!)
+      if (
+        this.state === GameState.PLAYING &&
+        this.player &&
+        this.player.isAlive &&
+        !this.player.isDying &&
+        activeEnemiesCount === 0 &&
+        this.enemies.length === 0
+      ) {
         this.state = GameState.WON;
         this.audio.playVictory();
         const isCampaignComplete = this.currentStageIndex >= STAGE_DEFINITIONS.length - 1;
         const nextStageName = isCampaignComplete ? undefined : STAGE_DEFINITIONS[this.currentStageIndex + 1].name;
         this.ui.configureVictoryModal(isCampaignComplete, this.currentStageIndex + 1, nextStageName);
+        this.input.clearTransientInputs();
+        this.hasShownLossModal = true;
+        this.modalInputCooldown = 0.6;
         this.ui.showStateModal(GameState.WON);
       }
 
-      // Classic Mode Loss
+      // Classic Mode Death / Respawn / Defeat Handling
+      if (this.state === GameState.PLAYING && this.player && !this.player.isAlive) {
+        // Wait until 3.0s death animation finishes
+        if (!this.player.isDying) {
+          if (this.player.lives > 1) {
+            this.player.lives--;
+            const safe = this.findSafeSpawnPosition(1, 1);
+            this.player.respawn(safe.col, safe.row);
+            this.ui.triggerLifeLostNotification(this.player.lives);
+          } else {
+            // Final life lost - Game Over!
+            this.player.lives = 0;
+            this.state = GameState.LOST;
+          }
+        }
+      }
+
       if (this.state === GameState.LOST && !this.hasShownLossModal) {
-        if (this.player && !this.player.isDying) {
+        if (!this.player || !this.player.isDying) {
           this.hasShownLossModal = true;
+          this.modalInputCooldown = 0.6;
+          this.ui.configureClassicDefeat();
+          this.input.clearTransientInputs();
           this.ui.showStateModal(GameState.LOST);
         }
       }
     } else if (this.currentMode === GameMode.VS_CPU) {
-      // Vs Computer Loss: Player 1 defeated
+      // 1. Handle Player 1 Death / Respawn / Defeat
       if (this.state === GameState.PLAYING && this.player && !this.player.isAlive) {
-        this.state = GameState.LOST;
-      }
-      // Vs Computer Win: Rival Bot destroyed! Ends the round immediately
-      if (
-        this.state === GameState.PLAYING &&
-        this.player &&
-        this.player.isAlive &&
-        this.player2 &&
-        !this.player2.isAlive
-      ) {
-        this.state = GameState.WON;
+        if (!this.player.isDying) {
+          if (this.player.lives > 1) {
+            this.player.lives--;
+            const safe = this.findSafeSpawnPosition(1, 1);
+            this.player.respawn(safe.col, safe.row);
+            this.ui.triggerLifeLostNotification(this.player.lives);
+          } else {
+            this.player.lives = 0;
+            this.state = GameState.LOST;
+          }
+        }
       }
 
+      // 2. Handle Rival Bot Death / Respawn / Victory
+      if (this.state === GameState.PLAYING && this.player2 && !this.player2.isAlive) {
+        if (!this.player2.isDying) {
+          if (this.player2.lives > 1) {
+            this.player2.lives--;
+            const safe = this.findSafeSpawnPosition(this.grid.cols - 2, this.grid.rows - 2);
+            this.player2.respawn(safe.col, safe.row);
+            if (this.rivalAI) this.rivalAI.reset();
+            this.ui.triggerLifeLostNotification(
+              this.player2.lives,
+              `RIVAL BOT DOWN! ${this.player2.lives} ${this.player2.lives === 1 ? 'LIFE' : 'LIVES'} REMAINING`
+            );
+          } else {
+            this.player2.lives = 0;
+            this.state = GameState.WON;
+          }
+        }
+      }
+
+      // 3. Show Versus Modals (only after death animations are done!)
       if (this.state === GameState.WON && !this.hasShownLossModal) {
         const rivalDone = !this.player2 || !this.player2.isDying;
-        if (rivalDone) {
+        const p1Done = !this.player || !this.player.isDying;
+        if (rivalDone && p1Done) {
           this.hasShownLossModal = true;
+          this.modalInputCooldown = 0.6;
           this.audio.playVictory();
           this.ui.configureVersusVictory('p1');
+          this.input.clearTransientInputs();
           this.ui.showStateModal(GameState.WON);
         }
       } else if (this.state === GameState.LOST && !this.hasShownLossModal) {
-        if (!this.player?.isDying) {
+        const p1Done = !this.player || !this.player.isDying;
+        if (p1Done) {
           this.hasShownLossModal = true;
+          this.modalInputCooldown = 0.6;
           this.ui.configureVersusDefeat(true);
+          this.input.clearTransientInputs();
           this.ui.showStateModal(GameState.LOST);
         }
       }
     } else if (this.currentMode === GameMode.LOCAL_2P) {
-      const p1Alive = this.player?.isAlive ?? false;
-      const p2Alive = this.player2?.isAlive ?? false;
-
-      if (this.state === GameState.PLAYING && (!p1Alive || !p2Alive)) {
-        this.state = GameState.WON;
+      // 1. Handle Player 1 Death / Respawn
+      if (this.state === GameState.PLAYING && this.player && !this.player.isAlive) {
+        if (!this.player.isDying) {
+          if (this.player.lives > 1) {
+            this.player.lives--;
+            const safe = this.findSafeSpawnPosition(1, 1);
+            this.player.respawn(safe.col, safe.row);
+            this.ui.triggerLifeLostNotification(
+              this.player.lives,
+              `P1 RESPAWNED! ${this.player.lives} ${this.player.lives === 1 ? 'LIFE' : 'LIVES'} REMAINING`
+            );
+          } else {
+            this.player.lives = 0;
+          }
+        }
       }
 
-      if (this.state === GameState.WON && !this.hasShownLossModal) {
-        const p1Done = !this.player || !this.player.isDying;
-        const p2Done = !this.player2 || !this.player2.isDying;
-        if (p1Done && p2Done) {
-          this.hasShownLossModal = true;
-          this.audio.playVictory();
-          if (!p1Alive && !p2Alive) {
-            this.ui.configureVersusVictory('draw');
-          } else if (p1Alive) {
-            this.ui.configureVersusVictory('p1');
+      // 2. Handle Player 2 Death / Respawn
+      if (this.state === GameState.PLAYING && this.player2 && !this.player2.isAlive) {
+        if (!this.player2.isDying) {
+          if (this.player2.lives > 1) {
+            this.player2.lives--;
+            const safe = this.findSafeSpawnPosition(this.grid.cols - 2, this.grid.rows - 2);
+            this.player2.respawn(safe.col, safe.row);
+            this.ui.triggerLifeLostNotification(
+              this.player2.lives,
+              `P2 RESPAWNED! ${this.player2.lives} ${this.player2.lives === 1 ? 'LIFE' : 'LIVES'} REMAINING`
+            );
           } else {
-            this.ui.configureVersusVictory('p2');
+            this.player2.lives = 0;
           }
+        }
+      }
+
+      // 3. Check for Match Conclusion
+      if (this.state === GameState.PLAYING) {
+        const p1Dead = this.player && !this.player.isAlive && !this.player.isDying && this.player.lives <= 0;
+        const p2Dead = this.player2 && !this.player2.isAlive && !this.player2.isDying && this.player2.lives <= 0;
+
+        if (p1Dead || p2Dead) {
+          this.state = GameState.WON;
+        }
+      }
+
+      // 4. Show Local 2P Outcome Modal
+      if (this.state === GameState.WON && !this.hasShownLossModal) {
+        const p1DoneDying = !this.player || !this.player.isDying;
+        const p2DoneDying = !this.player2 || !this.player2.isDying;
+        if (p1DoneDying && p2DoneDying) {
+          this.hasShownLossModal = true;
+          this.modalInputCooldown = 0.6;
+          this.audio.playVictory();
+
+          const p1Eliminated = !this.player || this.player.lives <= 0;
+          const p2Eliminated = !this.player2 || this.player2.lives <= 0;
+
+          if (p1Eliminated && p2Eliminated) {
+            this.ui.configureVersusVictory('draw');
+          } else if (p1Eliminated) {
+            this.ui.configureVersusVictory('p2');
+          } else {
+            this.ui.configureVersusVictory('p1');
+          }
+
+          this.input.clearTransientInputs();
           this.ui.showStateModal(GameState.WON);
         }
       }
@@ -861,14 +1093,17 @@ export class Game {
       const bombsAvail = this.player.maxBombs - this.player.activeBombs;
       const enemyCountDisplay = (this.currentMode === GameMode.CLASSIC)
         ? activeEnemiesCount
-        : ((this.player2 && this.player2.isAlive) ? 1 : 0);
+        : (this.player2 ? this.player2.lives : 0);
       this.ui.updateStats(
         bombsAvail,
         this.player.maxBombs,
         this.player.blastRange,
         this.player.speed,
         enemyCountDisplay,
-        this.player.hasShield
+        this.player.hasShield,
+        this.player.lives,
+        GAME_CONFIG.player.maxLives,
+        this.player.hasKick
       );
     }
   }

@@ -24,6 +24,11 @@ export class UIManager {
   private speedValEl: HTMLElement;
   private enemiesValEl: HTMLElement;
   private shieldValEl: HTMLElement | null;
+  private livesValEl: HTMLElement | null;
+  private livesMeterEl: HTMLElement | null;
+  private hudLivesBadgeValEl: HTMLElement | null;
+  private kickValEl: HTMLElement | null;
+  private kickMeterEl: HTMLElement | null;
 
   private pauseModal: HTMLElement;
   private winModal: HTMLElement;
@@ -68,6 +73,11 @@ export class UIManager {
     this.speedValEl = document.getElementById('stat-speed-val')!;
     this.enemiesValEl = document.getElementById('stat-enemies-val')!;
     this.shieldValEl = document.getElementById('stat-shield-val');
+    this.livesValEl = document.getElementById('stat-lives-val');
+    this.livesMeterEl = document.getElementById('stat-lives-meter');
+    this.hudLivesBadgeValEl = document.getElementById('hud-lives-badge-val');
+    this.kickValEl = document.getElementById('stat-kick-val');
+    this.kickMeterEl = document.getElementById('stat-kick-meter');
 
     this.rangeMeterEl = document.getElementById('stat-range-meter');
     this.bombsMeterEl = document.getElementById('stat-bombs-meter');
@@ -264,11 +274,55 @@ export class UIManager {
     }
   }
 
-  public updateStats(bombsAvail: number, maxBombs: number, range: number, speed: number, enemies: number, hasShield: boolean = false): void {
+  public updateStats(
+    bombsAvail: number,
+    maxBombs: number,
+    range: number,
+    speed: number,
+    enemies: number,
+    hasShield: boolean = false,
+    lives: number = 3,
+    maxLives: number = 5,
+    hasKick: boolean = false
+  ): void {
+    if (this.livesValEl) this.livesValEl.textContent = `${lives}/${maxLives}`;
+    if (this.hudLivesBadgeValEl) this.hudLivesBadgeValEl.textContent = `${lives}`;
+
+    if (this.livesMeterEl) {
+      const pips = this.livesMeterEl.querySelectorAll('.meter-pip');
+      pips.forEach((pip, idx) => {
+        if (idx < lives) {
+          pip.classList.add('active');
+        } else {
+          pip.classList.remove('active');
+        }
+      });
+    }
+
     if (this.bombValEl) this.bombValEl.textContent = `${bombsAvail}/${maxBombs}`;
     if (this.rangeValEl) this.rangeValEl.textContent = `${range}/7`;
     if (this.speedValEl) this.speedValEl.textContent = speed.toFixed(1);
     if (this.enemiesValEl) this.enemiesValEl.textContent = `${enemies}`;
+
+    if (this.kickValEl) {
+      this.kickValEl.textContent = hasKick ? 'READY' : 'OFF';
+      if (hasKick) {
+        this.kickValEl.classList.add('kick-active');
+      } else {
+        this.kickValEl.classList.remove('kick-active');
+      }
+    }
+    if (this.kickMeterEl) {
+      const pips = this.kickMeterEl.querySelectorAll('.meter-pip');
+      pips.forEach((pip) => {
+        if (hasKick) {
+          pip.classList.add('active');
+        } else {
+          pip.classList.remove('active');
+        }
+      });
+    }
+
     if (this.shieldValEl) {
       this.shieldValEl.textContent = hasShield ? 'ACTIVE' : 'OFF';
       if (hasShield) {
@@ -360,6 +414,12 @@ export class UIManager {
     } else if (type === 'SHIELD') {
       cardId = 'card-shield';
       label = `CYBER SHIELD ONLINE [1-HIT FORCE FIELD]`;
+    } else if (type === 'EXTRA_LIFE') {
+      cardId = 'card-lives';
+      label = `EXTRA LIFE RESTORED [+1 LIFE (${currentVal}/${maxVal})]`;
+    } else if (type === 'BOMB_KICK') {
+      cardId = 'card-kick';
+      label = `BOMB KICK POWER-UP ONLINE [WALK INTO BOMBS TO SLIDE THEM]`;
     }
 
     const card = document.getElementById(cardId);
@@ -380,6 +440,28 @@ export class UIManager {
         this.upgradeBannerEl?.classList.add('hidden');
         this.bannerTimer = null;
       }, 1500);
+    }
+  }
+
+  public triggerLifeLostNotification(livesRemaining: number, customMessage?: string): void {
+    const card = document.getElementById('card-lives');
+    if (card) {
+      card.classList.remove('card-upgrade-flash');
+      void card.offsetWidth;
+      card.classList.add('card-upgrade-flash');
+    }
+
+    if (this.upgradeBannerEl && this.upgradeTextEl) {
+      this.upgradeTextEl.textContent = customMessage || `LIFE LOST! ${livesRemaining} ${livesRemaining === 1 ? 'LIFE' : 'LIVES'} REMAINING`;
+      this.upgradeBannerEl.classList.remove('hidden');
+
+      if (this.bannerTimer !== null) {
+        window.clearTimeout(this.bannerTimer);
+      }
+      this.bannerTimer = window.setTimeout(() => {
+        this.upgradeBannerEl?.classList.add('hidden');
+        this.bannerTimer = null;
+      }, 2400);
     }
   }
 
@@ -494,5 +576,17 @@ export class UIManager {
       if (lossTitleEl) lossTitleEl.textContent = 'RIVAL BOT WINS';
       if (lossDescEl) lossDescEl.textContent = 'The AI rival bot predicted your trajectory and blew you out of the arena. Adapt your tactics and retry!';
     }
+  }
+
+  public configureClassicDefeat(): void {
+    const lossTitleEl = this.lossModal.querySelector('.loss-title');
+    const lossDescEl = this.lossModal.querySelector('.modal-desc');
+    const lossBadgeEl = this.lossModal.querySelector('.defeat-badge span');
+    const lossRibbonEl = this.lossModal.querySelector('.defeat-ribbon .ribbon-text');
+
+    if (lossRibbonEl) lossRibbonEl.textContent = 'MISSION STATUS // RUN TERMINATED';
+    if (lossBadgeEl) lossBadgeEl.textContent = 'PLAYER SIGNAL LOST';
+    if (lossTitleEl) lossTitleEl.textContent = 'BLASTED OUT';
+    if (lossDescEl) lossDescEl.textContent = 'You were caught in the blast zone. Reset the grid and make the next fuse count.';
   }
 }

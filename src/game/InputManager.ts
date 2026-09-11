@@ -213,4 +213,16 @@ export class InputManager {
     }
     return false;
   }
+
+  public clearTransientInputs(): void {
+    this.p1BombRequested = false;
+    this.p2BombRequested = false;
+    this.restartRequested = false;
+    this.pauseRequested = false;
+    this.muteRequested = false;
+    this.menuSelectRequested = false;
+    this.menuUpRequested = false;
+    this.menuDownRequested = false;
+    this.modeMenuRequested = false;
+  }
 }

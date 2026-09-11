@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GAME_CONFIG, CELL_SIZE, FLOOR_HEIGHT, PowerUpType, DeathType } from './constants';
+import { GAME_CONFIG, CELL_SIZE, FLOOR_HEIGHT, PowerUpType, DeathType, TileType } from './constants';
 import { Grid } from './Grid';
 import { AudioManager } from './AudioManager';
 import { AssetLoader } from './AssetLoader';
@@ -43,6 +43,9 @@ export class Player {
   public maxBombs: number;
   public activeBombs: number = 0;
   public blastRange: number;
+  public lives: number = GAME_CONFIG.player.initialLives;
+  public hasKick: boolean = false;
+  public onKickBomb?: (targetCol: number, targetRow: number, dirX: number, dirZ: number) => boolean;
 
   // State
   public isAlive: boolean = true;
@@ -558,6 +561,13 @@ export class Player {
     }
   }
 
+  public triggerKickSwing(): void {
+    if (this.legR) {
+      this.legR.rotation.x = -1.1;
+      this.legR.rotation.z = 0.25;
+    }
+  }
+
   private move(delta: number, input: { x: number; z: number }): void {
     const moveDist = this.speed * delta;
     const { col, row } = this.getGridCoords();
@@ -574,6 +584,15 @@ export class Player {
 
       // Forward collision detection
       const targetCol = col + (input.x > 0 ? 1 : -1);
+
+      // Bomb Kick: if player has kick capability and walks toward a bomb, kick it!
+      if (this.hasKick && this.grid.getTile(targetCol, row) === TileType.BOMB) {
+        const kicked = this.onKickBomb?.(targetCol, row, input.x > 0 ? 1 : -1, 0);
+        if (kicked) {
+          this.triggerKickSwing();
+        }
+      }
+
       const isTargetWalkable = this.grid.isWalkable(targetCol, row, this.activeBombTile || undefined);
 
       const nextX = this.mesh.position.x + input.x * moveDist;
@@ -593,6 +612,15 @@ export class Player {
 
       // Forward collision detection
       const targetRow = row + (input.z > 0 ? 1 : -1);
+
+      // Bomb Kick: if player has kick capability and walks toward a bomb, kick it!
+      if (this.hasKick && this.grid.getTile(col, targetRow) === TileType.BOMB) {
+        const kicked = this.onKickBomb?.(col, targetRow, 0, input.z > 0 ? 1 : -1);
+        if (kicked) {
+          this.triggerKickSwing();
+        }
+      }
+
       const isTargetWalkable = this.grid.isWalkable(col, targetRow, this.activeBombTile || undefined);
 
       const nextZ = this.mesh.position.z + input.z * moveDist;
@@ -678,6 +706,16 @@ export class Player {
         if (this.shieldGroup) this.shieldGroup.visible = true;
         this.audio.playShieldUp();
         break;
+      case PowerUpType.EXTRA_LIFE:
+        if (this.lives < GAME_CONFIG.player.maxLives) {
+          this.lives++;
+        }
+        this.audio.playExtraLife();
+        break;
+      case PowerUpType.BOMB_KICK:
+        this.hasKick = true;
+        this.audio.playKickPowerUp();
+        break;
     }
   }
 
@@ -718,6 +756,7 @@ export class Player {
       return;
     }
     this.isDying = true;
+    this.isAlive = false;
     this.deathType = type;
     this.deathTimer = 0;
     this.fireDeathSubStage = 0;
@@ -788,6 +827,13 @@ export class Player {
         this.deathEnemyMixer.update(delta);
       }
       this.updateEnemyDeathSounds();
+    }
+
+    if (this.deathTimer >= 3.0) {
+      this.isDying = false;
+      this.isAlive = false;
+      this.cleanupParticles();
+      this.cleanupDeathEffects();
     }
   }
 
@@ -917,6 +963,45 @@ export class Player {
     this.trailParticles = [];
   }
 
+  public respawn(col: number, row: number): void {
+    this.cleanupParticles();
+    this.cleanupDeathEffects();
+
+    this.isAlive = true;
+    this.isDying = false;
+    this.deathTimer = 0;
+    this.fireDeathSubStage = 0;
+    this.enemyDeathSubStage = 0;
+    this.activeBombTile = null;
+
+    this.currentPitch = 0;
+    this.currentRoll = 0;
+    this.plantImpactTime = 0;
+
+    // Reset limbs to neutral rest pose
+    if (this.head) this.head.rotation.set(0, 0, 0);
+    if (this.legL) this.legL.rotation.set(0, 0, 0);
+    if (this.legR) this.legR.rotation.set(0, 0, 0);
+    if (this.armL) this.armL.rotation.set(0, 0, 0);
+    if (this.armR) this.armR.rotation.set(0, 0, 0);
+    if (this.torso) this.torso.rotation.set(0, 0, 0);
+    if (this.scarf) this.scarf.rotation.set(0, 0, 0);
+
+    this.position = this.grid.gridToWorld(col, row, FLOOR_HEIGHT);
+    this.mesh.position.copy(this.position);
+    this.mesh.rotation.set(0, 0, 0);
+    this.visualWrapper.rotation.set(0, 0, 0);
+    this.visualWrapper.scale.set(1, 1, 1);
+    this.visualWrapper.position.set(0, 0.08, 0);
+    this.innerModel.visible = true;
+    if (this.haloMesh) this.haloMesh.visible = true;
+    this.mesh.visible = true;
+
+    // 2.5s post-respawn invulnerability grace with hologram flashing
+    this.invulnerableTimer = 2.5;
+    this.audio.playRespawn();
+  }
+
   public reset(col: number, row: number): void {
     this.cleanupParticles();
     this.cleanupDeathEffects();
@@ -925,6 +1010,8 @@ export class Player {
     this.maxBombs = GAME_CONFIG.player.initialBombs;
     this.activeBombs = 0;
     this.blastRange = GAME_CONFIG.player.initialRange;
+    this.lives = GAME_CONFIG.player.initialLives;
+    this.hasKick = false;
     this.isAlive = true;
     this.isDying = false;
     this.deathTimer = 0;

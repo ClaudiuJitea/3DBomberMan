@@ -16,6 +16,8 @@ export enum PowerUpType {
   BLAST_RANGE = 'BLAST_RANGE',
   SPEED = 'SPEED',
   SHIELD = 'SHIELD',
+  EXTRA_LIFE = 'EXTRA_LIFE',
+  BOMB_KICK = 'BOMB_KICK',
 }
 
 export enum GameState {
@@ -181,6 +183,8 @@ export const GAME_CONFIG = {
     maxBombs: 6,
     initialRange: 1,
     maxRange: 7,
+    initialLives: 3,
+    maxLives: 5,
   },
   bomb: {
     fuseDuration: 2.4,     // seconds
@@ -190,12 +194,14 @@ export const GAME_CONFIG = {
     duration: 0.70,        // seconds
   },
   powerup: {
-    dropChance: 0.20,      // Balanced 20% drop rate (reduced from 0.38)
+    dropChance: 0.22,      // Balanced drop rate
     weights: {
-      [PowerUpType.BOMB_COUNT]: 0.30,
-      [PowerUpType.BLAST_RANGE]: 0.30,
-      [PowerUpType.SPEED]: 0.25,
-      [PowerUpType.SHIELD]: 0.15,
+      [PowerUpType.BOMB_COUNT]: 0.25,
+      [PowerUpType.BLAST_RANGE]: 0.25,
+      [PowerUpType.SPEED]: 0.20,
+      [PowerUpType.BOMB_KICK]: 0.12,
+      [PowerUpType.SHIELD]: 0.10,
+      [PowerUpType.EXTRA_LIFE]: 0.08,
     },
   },
   enemies: {
@@ -250,6 +256,8 @@ export const ASSET_PATHS: Record<string, string> = {
   'powerup-range': '/assets/models/powerup-range.glb',
   'powerup-speed': '/assets/models/powerup-speed.glb',
   'powerup-shield': '/assets/models/powerup-shield.glb',
+  'powerup-life': '/assets/models/powerup-life.glb',
+  'powerup-kick': '/assets/models/powerup-kick.glb',
   'prop-pillar': '/assets/models/props/prop-pillar.glb',
   'prop-crystal': '/assets/models/props/prop-crystal.glb',
   'prop-terminal': '/assets/models/props/prop-terminal.glb',

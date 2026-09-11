@@ -154,7 +154,7 @@ export class RivalAI {
     const distToPlayer = Math.abs(pPos.col - rivalPos.col) + Math.abs(pPos.row - rivalPos.row);
 
     // 3A. If Player 1 is in direct blast corridor with clear line of sight:
-    if (this.hasClearLineOfSight(rivalPos, pPos) && distToPlayer <= this.rival.blastRange + 1) {
+    if (this.player.isAlive && !this.player.isDying && this.hasClearLineOfSight(rivalPos, pPos) && distToPlayer <= this.rival.blastRange + 1) {
       if (this.canPlaceBomb(rivalPos, threatMap)) {
         const simThreat = this.computeSimulatedBombThreat(rivalPos, this.rival.blastRange, threatMap);
         const escapePath = this.findEscapePath(rivalPos, simThreat, lethalMap);
@@ -843,5 +843,12 @@ export class RivalAI {
     }
 
     return null;
+  }
+
+  public reset(): void {
+    this.isSheltering = false;
+    this.shelterTile = null;
+    this.currentPath = [];
+    this.bombCooldownTimer = 1.2; // Grace period before AI drops a bomb right on respawn
   }
 }

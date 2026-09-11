@@ -234,18 +234,24 @@ export class Arena {
     let type = PowerUpType.BOMB_COUNT;
     let modelKey = 'powerup-bomb';
 
-    if (roll < 0.30) {
+    if (roll < 0.25) {
       type = PowerUpType.BOMB_COUNT;
       modelKey = 'powerup-bomb';
-    } else if (roll < 0.60) {
+    } else if (roll < 0.50) {
       type = PowerUpType.BLAST_RANGE;
       modelKey = 'powerup-range';
-    } else if (roll < 0.85) {
+    } else if (roll < 0.70) {
       type = PowerUpType.SPEED;
       modelKey = 'powerup-speed';
-    } else {
+    } else if (roll < 0.82) {
+      type = PowerUpType.BOMB_KICK;
+      modelKey = 'powerup-kick';
+    } else if (roll < 0.92) {
       type = PowerUpType.SHIELD;
       modelKey = 'powerup-shield';
+    } else {
+      type = PowerUpType.EXTRA_LIFE;
+      modelKey = 'powerup-life';
     }
 
     const mesh = this.assets.cloneModel(modelKey);

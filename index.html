@@ -19,6 +19,15 @@
           <span class="hud-stage-pill" id="hud-stage-num">STAGE 1</span>
           <span class="hud-stage-name" id="hud-stage-name">CYBER GRID</span>
         </div>
+        <div class="hud-lives-badge" id="hud-lives-badge">
+          <span class="hud-lives-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="#f43f5e" stroke="#ffffff" stroke-width="1.5">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </span>
+          <span class="hud-lives-label">LIVES</span>
+          <span id="hud-lives-badge-val" class="hud-lives-val">3</span>
+        </div>
         <button id="btn-mute" class="hud-btn arcade-audio-btn" title="Toggle Sound" aria-pressed="false">
           <span class="hud-btn-led"></span>
           <span id="mute-icon-container" class="hud-btn-icon">
@@ -41,6 +50,27 @@
       </div>
 
       <div class="hud-stats-bar">
+        <div class="stat-card lives-card" id="card-lives">
+          <div class="stat-icon lives-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-header-row">
+              <span class="stat-label">LIVES</span>
+              <span id="stat-lives-val" class="stat-value">3/5</span>
+            </div>
+            <div class="stat-meter" id="stat-lives-meter">
+              <span class="meter-pip active heart"></span>
+              <span class="meter-pip active heart"></span>
+              <span class="meter-pip active heart"></span>
+              <span class="meter-pip heart"></span>
+              <span class="meter-pip heart"></span>
+            </div>
+          </div>
+        </div>
+
         <div class="stat-card range-card" id="card-blast-power">
           <div class="stat-icon range-icon">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
@@ -114,6 +144,24 @@
               <span class="meter-pip speed"></span>
               <span class="meter-pip speed"></span>
               <span class="meter-pip speed"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card kick-card" id="card-kick">
+          <div class="stat-icon kick-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 16l4-8h5l2 4h4v4h-6l-3 4H4z" fill="rgba(255,255,255,0.2)"/>
+              <path d="M18 11l3-3m0 0l-3-3m3 3H13"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-header-row">
+              <span class="stat-label">BOMB KICK</span>
+              <span id="stat-kick-val" class="stat-value">OFF</span>
+            </div>
+            <div class="stat-meter" id="stat-kick-meter">
+              <span class="meter-pip kick"></span>
             </div>
           </div>
         </div>
