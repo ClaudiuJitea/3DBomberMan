@@ -339,6 +339,7 @@ export class Enemy {
   public kill(): void {
     if (this.isDying || !this.isAlive) return;
     this.isDying = true;
+    this.isAlive = false;
     this.deathTimer = 0;
     this.deathAudioStage = 0;
 

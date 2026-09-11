@@ -638,7 +638,7 @@ export class Game {
         const pGrid = this.player.getGridCoords();
         if (this.grid.hasFire(pGrid.col, pGrid.row)) {
           this.player.kill(DeathType.FIRE);
-          if (this.currentMode === GameMode.CLASSIC) {
+          if (this.currentMode === GameMode.CLASSIC && !this.player.isAlive) {
             this.state = GameState.LOST;
           }
         }
@@ -691,7 +691,9 @@ export class Game {
       onCollect: (type: PowerUpType) => {
         if (this.player2) {
           this.player2.applyPowerUp(type);
-          this.audio.playPowerUp();
+          if (type !== PowerUpType.SHIELD) {
+            this.audio.playPowerUp();
+          }
         }
       }
     } : undefined;
@@ -702,9 +704,11 @@ export class Game {
       (type: PowerUpType) => {
         if (this.player) {
           this.player.applyPowerUp(type);
-          this.audio.playPowerUp();
-          const maxVal = (type === PowerUpType.BLAST_RANGE) ? 7 : (type === PowerUpType.BOMB_COUNT ? 6 : 6);
-          const curVal = (type === PowerUpType.BLAST_RANGE) ? this.player.blastRange : (type === PowerUpType.BOMB_COUNT ? this.player.maxBombs : Math.round((this.player.speed - 4.8) / 0.8) + 1);
+          if (type !== PowerUpType.SHIELD) {
+            this.audio.playPowerUp();
+          }
+          const maxVal = (type === PowerUpType.BLAST_RANGE) ? 7 : (type === PowerUpType.BOMB_COUNT ? 6 : (type === PowerUpType.SHIELD ? 1 : 6));
+          const curVal = (type === PowerUpType.BLAST_RANGE) ? this.player.blastRange : (type === PowerUpType.BOMB_COUNT ? this.player.maxBombs : (type === PowerUpType.SHIELD ? 1 : Math.round((this.player.speed - 4.8) / 0.8) + 1));
           this.ui.triggerPowerUpFeedback(type, curVal, maxVal);
         }
       },
@@ -736,7 +740,7 @@ export class Game {
 
         enemy.update(delta, targetCoords);
 
-        if (enemy.isAlive) {
+        if (enemy.isAlive && !enemy.isDying) {
           activeEnemiesCount++;
 
           // Collision check with Player 1
@@ -744,9 +748,14 @@ export class Game {
             const dx1 = this.player!.position.x - enemy.mesh.position.x;
             const dz1 = this.player!.position.z - enemy.mesh.position.z;
             if (dx1 * dx1 + dz1 * dz1 < 0.95) {
+              const hadShield = this.player!.hasShield;
               this.player!.kill(DeathType.ENEMY);
-              if (this.currentMode === GameMode.CLASSIC) {
+              if (this.currentMode === GameMode.CLASSIC && !this.player!.isAlive) {
                 this.state = GameState.LOST;
+              }
+              if (hadShield && this.player!.isAlive) {
+                // Shield kinetic discharge vaporizes the attacking robot
+                enemy.kill();
               }
             }
           }
@@ -756,7 +765,12 @@ export class Game {
             const dx2 = this.player2!.position.x - enemy.mesh.position.x;
             const dz2 = this.player2!.position.z - enemy.mesh.position.z;
             if (dx2 * dx2 + dz2 * dz2 < 0.95) {
+              const hadShield = this.player2!.hasShield;
               this.player2!.kill(DeathType.ENEMY);
+              if (hadShield && this.player2!.isAlive) {
+                // Shield kinetic discharge vaporizes the attacking robot
+                enemy.kill();
+              }
             }
           }
         } else if (!enemy.isDying) {
@@ -853,7 +867,8 @@ export class Game {
         this.player.maxBombs,
         this.player.blastRange,
         this.player.speed,
-        enemyCountDisplay
+        enemyCountDisplay,
+        this.player.hasShield
       );
     }
   }

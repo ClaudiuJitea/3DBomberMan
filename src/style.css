@@ -35,6 +35,10 @@
 
   --green: #10b981;
   --blue: #38bdf8;
+  --shield: #06b6d4;
+  --shield-light: #22d3ee;
+  --shield-dark: #0891b2;
+  --shield-3d: #0e7490;
 
   --font-display: 'Luckiest Guy', Impact, sans-serif;
   --font-accent: 'Bungee', system-ui, sans-serif;
@@ -212,6 +216,16 @@ button { font: inherit; }
   --accent-light: var(--yellow-light);
   --accent-dark: var(--yellow-dark);
   --accent-3d: var(--yellow-3d);
+}
+.shield-card {
+  --accent: var(--shield);
+  --accent-light: var(--shield-light);
+  --accent-dark: var(--shield-dark);
+  --accent-3d: var(--shield-3d);
+}
+.stat-value.shield-active {
+  color: #22d3ee;
+  text-shadow: 0 0 10px rgba(34, 211, 238, 0.85);
 }
 .enemy-card {
   --accent: var(--red);

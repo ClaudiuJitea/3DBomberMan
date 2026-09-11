@@ -23,6 +23,7 @@ export class UIManager {
   private rangeValEl: HTMLElement;
   private speedValEl: HTMLElement;
   private enemiesValEl: HTMLElement;
+  private shieldValEl: HTMLElement | null;
 
   private pauseModal: HTMLElement;
   private winModal: HTMLElement;
@@ -34,6 +35,7 @@ export class UIManager {
   private bombsMeterEl: HTMLElement | null;
   private speedMeterEl: HTMLElement | null;
   private enemiesMeterEl: HTMLElement | null;
+  private shieldMeterEl: HTMLElement | null;
   private upgradeBannerEl: HTMLElement | null;
   private upgradeTextEl: HTMLElement | null;
   private bannerTimer: number | null = null;
@@ -65,11 +67,13 @@ export class UIManager {
     this.rangeValEl = document.getElementById('stat-range-val')!;
     this.speedValEl = document.getElementById('stat-speed-val')!;
     this.enemiesValEl = document.getElementById('stat-enemies-val')!;
+    this.shieldValEl = document.getElementById('stat-shield-val');
 
     this.rangeMeterEl = document.getElementById('stat-range-meter');
     this.bombsMeterEl = document.getElementById('stat-bombs-meter');
     this.speedMeterEl = document.getElementById('stat-speed-meter');
     this.enemiesMeterEl = document.getElementById('stat-enemies-meter');
+    this.shieldMeterEl = document.getElementById('stat-shield-meter');
     this.upgradeBannerEl = document.getElementById('hud-upgrade-banner');
     this.upgradeTextEl = document.getElementById('hud-upgrade-text');
 
@@ -260,11 +264,30 @@ export class UIManager {
     }
   }
 
-  public updateStats(bombsAvail: number, maxBombs: number, range: number, speed: number, enemies: number): void {
+  public updateStats(bombsAvail: number, maxBombs: number, range: number, speed: number, enemies: number, hasShield: boolean = false): void {
     if (this.bombValEl) this.bombValEl.textContent = `${bombsAvail}/${maxBombs}`;
     if (this.rangeValEl) this.rangeValEl.textContent = `${range}/7`;
     if (this.speedValEl) this.speedValEl.textContent = speed.toFixed(1);
     if (this.enemiesValEl) this.enemiesValEl.textContent = `${enemies}`;
+    if (this.shieldValEl) {
+      this.shieldValEl.textContent = hasShield ? 'ACTIVE' : 'OFF';
+      if (hasShield) {
+        this.shieldValEl.classList.add('shield-active');
+      } else {
+        this.shieldValEl.classList.remove('shield-active');
+      }
+    }
+
+    if (this.shieldMeterEl) {
+      const pips = this.shieldMeterEl.querySelectorAll('.meter-pip');
+      pips.forEach((pip) => {
+        if (hasShield) {
+          pip.classList.add('active');
+        } else {
+          pip.classList.remove('active');
+        }
+      });
+    }
 
     // Update segmented Blast Power meter pips (starts at 1 pip min, fills gradually to 7)
     if (this.rangeMeterEl) {
@@ -334,6 +357,9 @@ export class UIManager {
     } else if (type === 'SPEED') {
       cardId = 'card-speed';
       label = `VELOCITY THRUSTER BOOST`;
+    } else if (type === 'SHIELD') {
+      cardId = 'card-shield';
+      label = `CYBER SHIELD ONLINE [1-HIT FORCE FIELD]`;
     }
 
     const card = document.getElementById(cardId);

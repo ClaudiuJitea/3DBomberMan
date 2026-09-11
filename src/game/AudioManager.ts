@@ -177,6 +177,83 @@ export class AudioManager {
     });
   }
 
+  public playShieldUp(): void {
+    if (this.muted) return;
+    this.initContext();
+    if (!this.ctx || !this.masterGain) return;
+
+    const now = this.ctx.currentTime;
+    // Crystalline resonant chord (C5, E5, G5, C6)
+    const freqs = [523.25, 659.25, 783.99, 1046.50];
+    freqs.forEach((freq, idx) => {
+      if (!this.ctx || !this.masterGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+
+      gain.gain.setValueAtTime(0.22, now + idx * 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.35);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now + idx * 0.05);
+      osc.stop(now + idx * 0.05 + 0.35);
+    });
+  }
+
+  public playShieldBreak(): void {
+    if (this.muted) return;
+    this.initContext();
+    if (!this.ctx || !this.masterGain) return;
+
+    const now = this.ctx.currentTime;
+
+    // 1. Force field shatter zap
+    const zapOsc = this.ctx.createOscillator();
+    const zapGain = this.ctx.createGain();
+    zapOsc.type = 'sawtooth';
+    zapOsc.frequency.setValueAtTime(850, now);
+    zapOsc.frequency.exponentialRampToValueAtTime(80, now + 0.25);
+
+    zapGain.gain.setValueAtTime(0.35, now);
+    zapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+    zapOsc.connect(zapGain);
+    zapGain.connect(this.masterGain);
+    zapOsc.start(now);
+    zapOsc.stop(now + 0.25);
+
+    // 2. Crystalline crackle / bandpass noise pop
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.25);
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+
+    const whiteNoise = this.ctx.createBufferSource();
+    whiteNoise.buffer = noiseBuffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(2400, now);
+    filter.Q.setValueAtTime(3.0, now);
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.3, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+    whiteNoise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(this.masterGain);
+
+    whiteNoise.start(now);
+    whiteNoise.stop(now + 0.25);
+  }
+
   public playEnemyDeath(): void {
     this.playEnemyRobotDeath(0);
   }

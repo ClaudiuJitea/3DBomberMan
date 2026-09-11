@@ -15,6 +15,7 @@ export enum PowerUpType {
   BOMB_COUNT = 'BOMB_COUNT',
   BLAST_RANGE = 'BLAST_RANGE',
   SPEED = 'SPEED',
+  SHIELD = 'SHIELD',
 }
 
 export enum GameState {
@@ -189,11 +190,12 @@ export const GAME_CONFIG = {
     duration: 0.70,        // seconds
   },
   powerup: {
-    dropChance: 0.38,      // 38% chance from destroyed block
+    dropChance: 0.20,      // Balanced 20% drop rate (reduced from 0.38)
     weights: {
-      [PowerUpType.BOMB_COUNT]: 0.35,
-      [PowerUpType.BLAST_RANGE]: 0.35,
-      [PowerUpType.SPEED]: 0.30,
+      [PowerUpType.BOMB_COUNT]: 0.30,
+      [PowerUpType.BLAST_RANGE]: 0.30,
+      [PowerUpType.SPEED]: 0.25,
+      [PowerUpType.SHIELD]: 0.15,
     },
   },
   enemies: {
@@ -247,6 +249,7 @@ export const ASSET_PATHS: Record<string, string> = {
   'powerup-bomb': '/assets/models/powerup-bomb.glb',
   'powerup-range': '/assets/models/powerup-range.glb',
   'powerup-speed': '/assets/models/powerup-speed.glb',
+  'powerup-shield': '/assets/models/powerup-shield.glb',
   'prop-pillar': '/assets/models/props/prop-pillar.glb',
   'prop-crystal': '/assets/models/props/prop-crystal.glb',
   'prop-terminal': '/assets/models/props/prop-terminal.glb',

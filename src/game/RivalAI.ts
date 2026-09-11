@@ -119,27 +119,27 @@ export class RivalAI {
     }
 
     // -------------------------------------------------------------
-    // 2. COMBAT DEFENSE: Kill small robots with trap bombs & avoid collision
+    // 2. CLOSE-QUARTERS DEFENSE: Counter & Evade Immediate Enemy Collisions
     // -------------------------------------------------------------
-    const nearbyEnemy = this.findNearbyEnemyThreat(rivalPos);
-    if (nearbyEnemy) {
-      const enemyDist = Math.abs(nearbyEnemy.col - rivalPos.col) + Math.abs(nearbyEnemy.row - rivalPos.row);
+    const closeEnemy = this.findNearbyEnemyThreat(rivalPos, 2);
+    if (closeEnemy) {
+      const enemyDist = Math.abs(closeEnemy.col - rivalPos.col) + Math.abs(closeEnemy.row - rivalPos.row);
+      const inSameLine = (closeEnemy.col === rivalPos.col || closeEnemy.row === rivalPos.row);
+      const hasLOS = inSameLine && this.hasClearLineOfSight(rivalPos, { col: closeEnemy.col, row: closeEnemy.row });
 
-      // If enemy is approaching down the same corridor within 2-3 tiles:
-      const inSameLine = (nearbyEnemy.col === rivalPos.col || nearbyEnemy.row === rivalPos.row);
-      if (inSameLine && enemyDist >= 2 && enemyDist <= 3 && this.canPlaceBomb(rivalPos, threatMap)) {
+      // If at distance 2 with LOS in the corridor, drop an ambush trap bomb!
+      if (enemyDist === 2 && hasLOS && this.canPlaceBomb(rivalPos, threatMap)) {
         const simThreat = this.computeSimulatedBombThreat(rivalPos, this.rival.blastRange, threatMap);
         const escapePath = this.findEscapePath(rivalPos, simThreat, lethalMap);
         if (escapePath && escapePath.length > 0) {
-          // Drop a trap bomb right in the enemy's path and duck into cover!
           this.executeBombPlant(escapePath);
           return;
         }
       }
 
-      // If enemy is dangerously close (<= 2 tiles) and we didn't bomb: EVADE!
-      if (enemyDist <= 2) {
-        const evadePath = this.findEvasionPathFromEnemy(rivalPos, nearbyEnemy, threatMap, lethalMap);
+      // If dangerously close (1 tile away, or 2 tiles in same line and couldn't bomb): EVADE!
+      if (enemyDist <= 1 || (enemyDist === 2 && inSameLine)) {
+        const evadePath = this.findEvasionPathFromEnemy(rivalPos, closeEnemy, threatMap, lethalMap);
         if (evadePath && evadePath.length > 0) {
           this.currentPath = evadePath;
           return;
@@ -148,12 +148,12 @@ export class RivalAI {
     }
 
     // -------------------------------------------------------------
-    // 3. COMBAT OFFENSE: Attack Player 1 ("Reach me and kill me")
+    // 3. COMBAT OFFENSE: Direct Corridor Strikes (Player 1 or Small Robots)
     // -------------------------------------------------------------
     const pPos = this.player.getGridCoords();
     const distToPlayer = Math.abs(pPos.col - rivalPos.col) + Math.abs(pPos.row - rivalPos.row);
 
-    // If Player 1 is in direct blast corridor with clear line of sight:
+    // 3A. If Player 1 is in direct blast corridor with clear line of sight:
     if (this.hasClearLineOfSight(rivalPos, pPos) && distToPlayer <= this.rival.blastRange + 1) {
       if (this.canPlaceBomb(rivalPos, threatMap)) {
         const simThreat = this.computeSimulatedBombThreat(rivalPos, this.rival.blastRange, threatMap);
@@ -166,8 +166,54 @@ export class RivalAI {
       }
     }
 
+    // 3B. If ANY living small robot is in direct corridor line-of-sight within strike reach:
+    const livingEnemies = this.getEnemies().filter(e => e.isAlive && !e.isDying);
+    for (const enemy of livingEnemies) {
+      const enemyDist = Math.abs(enemy.col - rivalPos.col) + Math.abs(enemy.row - rivalPos.row);
+      const inSameLine = (enemy.col === rivalPos.col || enemy.row === rivalPos.row);
+      const strikeRange = Math.max(3, this.rival.blastRange + 1);
+
+      if (inSameLine && enemyDist >= 2 && enemyDist <= strikeRange && this.hasClearLineOfSight(rivalPos, { col: enemy.col, row: enemy.row })) {
+        if (this.canPlaceBomb(rivalPos, threatMap)) {
+          const simThreat = this.computeSimulatedBombThreat(rivalPos, this.rival.blastRange, threatMap);
+          const escapePath = this.findEscapePath(rivalPos, simThreat, lethalMap);
+          if (escapePath && escapePath.length > 0) {
+            // Drop a bomb to blast the small robot and duck into cover!
+            this.executeBombPlant(escapePath);
+            return;
+          }
+        }
+      }
+    }
+
     // -------------------------------------------------------------
-    // 4. POWER-UP HARVESTING: Grab nearby powerups to upgrade stats
+    // 4. ACTIVE ROBOT HUNTING: Stalk & Intercept Small Robots
+    // -------------------------------------------------------------
+    const enemyHunt = this.findHuntTargetForEnemies(rivalPos, threatMap, lethalMap);
+    if (enemyHunt) {
+      // If we have already arrived at the strike vantage tile:
+      if (rivalPos.col === enemyHunt.strikeTile.col && rivalPos.row === enemyHunt.strikeTile.row) {
+        if (this.canPlaceBomb(rivalPos, threatMap)) {
+          const simThreat = this.computeSimulatedBombThreat(rivalPos, this.rival.blastRange, threatMap);
+          const escapePath = this.findEscapePath(rivalPos, simThreat, lethalMap);
+          if (escapePath && escapePath.length > 0) {
+            this.executeBombPlant(escapePath);
+            return;
+          }
+        }
+      }
+
+      // If we have a path towards the strike position, stalk the robot!
+      // (Prioritize hunting robots if reachable within 8 steps or closer than Player 1)
+      const huntDist = enemyHunt.path.length;
+      if (huntDist > 0 && (huntDist <= 8 || huntDist < distToPlayer)) {
+        this.currentPath = enemyHunt.path;
+        return;
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 5. POWER-UP HARVESTING: Grab nearby powerups to upgrade stats
     // -------------------------------------------------------------
     const powerUps = this.getPowerUpPositions();
     let bestPowerUpPath: GridPos[] | null = null;
@@ -189,9 +235,24 @@ export class RivalAI {
     }
 
     // -------------------------------------------------------------
-    // 5. MAIN DIRECTIVE: Breach & Tunnel towards Player 1!
+    // 6. MAIN DIRECTIVE: Breach & Tunnel towards Closest Target (Robot or Player 1)
     // -------------------------------------------------------------
-    const breach = this.findBreachPathToPlayer(rivalPos, pPos, threatMap, lethalMap);
+    let primaryTarget: GridPos = pPos;
+    let minTargetDist = distToPlayer;
+
+    for (const e of livingEnemies) {
+      const eDist = Math.abs(e.col - rivalPos.col) + Math.abs(e.row - rivalPos.row);
+      if (eDist < minTargetDist) {
+        minTargetDist = eDist;
+        primaryTarget = { col: e.col, row: e.row };
+      }
+    }
+
+    let breach = this.findBreachPathToTarget(rivalPos, primaryTarget, threatMap, lethalMap);
+    if (!breach && (primaryTarget.col !== pPos.col || primaryTarget.row !== pPos.row)) {
+      breach = this.findBreachPathToTarget(rivalPos, pPos, threatMap, lethalMap);
+    }
+
     if (breach) {
       // If we are at the target stand tile right in front of a blocking block:
       if (breach.standTile && rivalPos.col === breach.standTile.col && rivalPos.row === breach.standTile.row) {
@@ -199,14 +260,14 @@ export class RivalAI {
           const simThreat = this.computeSimulatedBombThreat(rivalPos, this.rival.blastRange, threatMap);
           const escapePath = this.findEscapePath(rivalPos, simThreat, lethalMap);
           if (escapePath && escapePath.length > 0) {
-            // Blow up this block to open the path to Player 1!
+            // Blow up this block to open the path!
             this.executeBombPlant(escapePath);
             return;
           }
         }
       }
 
-      // If we need to walk to the stand tile or directly towards Player:
+      // If we need to walk to the stand tile or directly towards target:
       if (breach.path && breach.path.length > 0) {
         this.currentPath = breach.path;
         return;
@@ -214,7 +275,7 @@ export class RivalAI {
     }
 
     // -------------------------------------------------------------
-    // 6. FALLBACK: Destroy any reachable breakable block nearby
+    // 7. FALLBACK: Destroy any reachable breakable block nearby
     // -------------------------------------------------------------
     const blockHunt = this.findNearestBlockToClear(rivalPos, threatMap, lethalMap);
     if (blockHunt) {
@@ -259,7 +320,7 @@ export class RivalAI {
     this.currentPath = escapePath;
   }
 
-  private findNearbyEnemyThreat(rivalPos: GridPos): Enemy | null {
+  private findNearbyEnemyThreat(rivalPos: GridPos, maxDist: number = 3): Enemy | null {
     const enemies = this.getEnemies();
     let closestEnemy: Enemy | null = null;
     let closestDist = 999;
@@ -267,13 +328,71 @@ export class RivalAI {
     for (const e of enemies) {
       if (!e.isAlive || e.isDying) continue;
       const dist = Math.abs(e.col - rivalPos.col) + Math.abs(e.row - rivalPos.row);
-      if (dist <= 3 && dist < closestDist) {
+      if (dist <= maxDist && dist < closestDist) {
         closestDist = dist;
         closestEnemy = e;
       }
     }
 
     return closestEnemy;
+  }
+
+  private findHuntTargetForEnemies(
+    rivalPos: GridPos,
+    threatMap: boolean[][],
+    lethalMap: boolean[][]
+  ): { path: GridPos[]; strikeTile: GridPos; targetEnemy: Enemy } | null {
+    const enemies = this.getEnemies().filter(e => e.isAlive && !e.isDying);
+    if (enemies.length === 0) return null;
+
+    // Breadth-First Search outward from rivalPos to find shortest corridor route to a strike vantage point
+    const queue: { pos: GridPos; path: GridPos[] }[] = [{ pos: rivalPos, path: [] }];
+    const visited = new Set<string>();
+    visited.add(`${rivalPos.col},${rivalPos.row}`);
+
+    const dirs = [
+      { col: 0, row: -1 },
+      { col: 0, row: 1 },
+      { col: -1, row: 0 },
+      { col: 1, row: 0 },
+    ];
+
+    const maxStrike = Math.max(3, this.rival.blastRange + 1);
+
+    while (queue.length > 0) {
+      const { pos, path } = queue.shift()!;
+
+      // Check if 'pos' is a valid vantage strike point against any living enemy
+      for (const e of enemies) {
+        const dist = Math.abs(e.col - pos.col) + Math.abs(e.row - pos.row);
+        // Standoff distance 2 to maxStrike, along same axis with unobstructed line of sight
+        if (dist >= 2 && dist <= maxStrike && (e.col === pos.col || e.row === pos.row)) {
+          if (this.hasClearLineOfSight(pos, { col: e.col, row: e.row })) {
+            return { path, strikeTile: pos, targetEnemy: e };
+          }
+        }
+      }
+
+      // Max hunt search radius: 10 steps
+      if (path.length >= 10) continue;
+
+      for (const d of dirs) {
+        const next = { col: pos.col + d.col, row: pos.row + d.row };
+        const key = `${next.col},${next.row}`;
+
+        if (this.grid.isInBounds(next.col, next.row) && !visited.has(key)) {
+          visited.add(key);
+          const tile = this.grid.getTile(next.col, next.row);
+          const isSafe = !threatMap[next.col]?.[next.row] && !lethalMap[next.col]?.[next.row];
+
+          if (tile === TileType.EMPTY && isSafe) {
+            queue.push({ pos: next, path: [...path, next] });
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   private findEvasionPathFromEnemy(
@@ -561,14 +680,14 @@ export class RivalAI {
     return null;
   }
 
-  private findBreachPathToPlayer(
+  private findBreachPathToTarget(
     start: GridPos,
-    playerPos: GridPos,
+    targetPos: GridPos,
     threatMap: boolean[][],
     lethalMap: boolean[][]
   ): { path: GridPos[]; standTile: GridPos | null } | null {
-    // Dijkstra / BFS prioritizing shortest corridor to Player 1
-    // Traverses empty corridors until reaching Player 1 or finding the first breakable block along the assault route
+    // Dijkstra / BFS prioritizing shortest corridor to target combatant (enemy robot or Player 1)
+    // Traverses empty corridors until reaching target or finding the first breakable block along the assault route
     const visited = new Set<string>();
     const queue: { pos: GridPos; path: GridPos[] }[] = [
       { pos: start, path: [] },
@@ -582,13 +701,13 @@ export class RivalAI {
       { col: 1, row: 0 },
     ];
 
-    let bestBlockBreach: { path: GridPos[]; standTile: GridPos; distToPlayer: number } | null = null;
+    let bestBlockBreach: { path: GridPos[]; standTile: GridPos; distToTarget: number } | null = null;
 
     while (queue.length > 0) {
       const { pos, path } = queue.shift()!;
 
-      // Clear open corridor directly to Player 1 reached!
-      if (pos.col === playerPos.col && pos.row === playerPos.row) {
+      // Clear open corridor directly to target reached!
+      if (pos.col === targetPos.col && pos.row === targetPos.row) {
         return { path, standTile: null };
       }
 
@@ -604,12 +723,12 @@ export class RivalAI {
 
         // Breakable BLOCK in our way: standing at 'pos' allows us to plant a bomb to breach 'next'!
         if (tile === TileType.BLOCK) {
-          const dist = Math.abs(next.col - playerPos.col) + Math.abs(next.row - playerPos.row);
-          if (!bestBlockBreach || dist < bestBlockBreach.distToPlayer) {
+          const dist = Math.abs(next.col - targetPos.col) + Math.abs(next.row - targetPos.row);
+          if (!bestBlockBreach || dist < bestBlockBreach.distToTarget) {
             bestBlockBreach = {
               path: path.length > 0 ? path : [pos],
               standTile: pos,
-              distToPlayer: dist,
+              distToTarget: dist,
             };
           }
           continue;

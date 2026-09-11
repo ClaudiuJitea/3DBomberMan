@@ -101,6 +101,16 @@ export class Player {
   public activeBombTile: { col: number; row: number } | null = null;
   public isRival: boolean = false;
 
+  // Cyber Energy Shield & Mercy Invulnerability
+  public hasShield: boolean = false;
+  public invulnerableTimer: number = 0;
+  private shieldGroup: THREE.Group | null = null;
+  private shieldHexMesh: THREE.Mesh | null = null;
+  private shieldRingMesh: THREE.Mesh | null = null;
+  private shieldRing2Mesh: THREE.Mesh | null = null;
+  private shieldShockwave: THREE.Mesh | null = null;
+  private shockwaveTimer: number = 0;
+
   constructor(
     col: number,
     row: number,
@@ -249,11 +259,80 @@ export class Player {
     this.particleGeo = new THREE.SphereGeometry(0.06, 6, 6);
     this.cyanParticleMat = new THREE.MeshBasicMaterial({ color: primaryColor, transparent: true, opacity: 0.9 });
     this.pinkParticleMat = new THREE.MeshBasicMaterial({ color: secondaryColor, transparent: true, opacity: 0.9 });
+
+    // Cyber Energy Shield 3D Visuals
+    this.initShieldVisuals();
+  }
+
+  private initShieldVisuals(): void {
+    const shieldColor = this.isRival ? 0xff2a55 : 0x00f5d4;
+    const shieldAccent = this.isRival ? 0xffb703 : 0x70e000;
+
+    this.shieldGroup = new THREE.Group();
+    this.shieldGroup.position.set(0, 0.72, 0);
+
+    // 1. Translucent glowing energy sphere
+    const sphereGeo = new THREE.SphereGeometry(0.82, 24, 20);
+    const sphereMat = new THREE.MeshStandardMaterial({
+      color: shieldColor,
+      emissive: shieldColor,
+      emissiveIntensity: 0.65,
+      transparent: true,
+      opacity: 0.35,
+      roughness: 0.15,
+      metalness: 0.2,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+    this.shieldGroup.add(sphereMesh);
+
+    // 2. Hexagonal cybernetic force-field wireframe cage
+    const hexGeo = new THREE.IcosahedronGeometry(0.85, 1);
+    const hexMat = new THREE.MeshBasicMaterial({
+      color: shieldAccent,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.65,
+      depthWrite: false,
+    });
+    this.shieldHexMesh = new THREE.Mesh(hexGeo, hexMat);
+    this.shieldGroup.add(this.shieldHexMesh);
+
+    // 3. Orbiting energy rings
+    const ringGeo = new THREE.TorusGeometry(0.92, 0.02, 8, 36);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: shieldColor,
+      transparent: true,
+      opacity: 0.75,
+      depthWrite: false,
+    });
+    this.shieldRingMesh = new THREE.Mesh(ringGeo, ringMat);
+    this.shieldRingMesh.rotation.x = Math.PI / 3.2;
+    this.shieldGroup.add(this.shieldRingMesh);
+
+    const ring2Geo = new THREE.TorusGeometry(0.96, 0.016, 8, 36);
+    const ring2Mat = new THREE.MeshBasicMaterial({
+      color: shieldAccent,
+      transparent: true,
+      opacity: 0.65,
+      depthWrite: false,
+    });
+    this.shieldRing2Mesh = new THREE.Mesh(ring2Geo, ring2Mat);
+    this.shieldRing2Mesh.rotation.z = Math.PI / 3.0;
+    this.shieldGroup.add(this.shieldRing2Mesh);
+
+    this.shieldGroup.visible = false;
+    this.visualWrapper.add(this.shieldGroup);
   }
 
   public dispose(): void {
     this.cleanupDeathEffects();
     this.cleanupParticles();
+    if (this.shieldShockwave) {
+      this.scene.remove(this.shieldShockwave);
+      this.shieldShockwave = null;
+    }
     if (this.deathFireMixer) {
       this.deathFireMixer.stopAllAction();
       this.deathFireMixer = null;
@@ -275,6 +354,47 @@ export class Player {
   }
 
   public update(delta: number, inputDir: { x: number; z: number } | null): void {
+    // Shockwave expansion animation
+    if (this.shieldShockwave) {
+      this.shockwaveTimer -= delta;
+      if (this.shockwaveTimer <= 0) {
+        this.scene.remove(this.shieldShockwave);
+        this.shieldShockwave = null;
+      } else {
+        const progress = 1 - (this.shockwaveTimer / 0.42);
+        const scale = 1 + progress * 4.8;
+        this.shieldShockwave.scale.set(scale, scale, 1);
+        (this.shieldShockwave.material as THREE.MeshBasicMaterial).opacity = Math.max(0, (1 - progress) * 0.95);
+      }
+    }
+
+    // Mercy invulnerability i-frames handling & model flicker
+    if (this.invulnerableTimer > 0) {
+      this.invulnerableTimer -= delta;
+      if (this.invulnerableTimer <= 0) {
+        this.invulnerableTimer = 0;
+        this.innerModel.visible = true;
+      } else {
+        this.innerModel.visible = Math.floor(this.invulnerableTimer * 20) % 2 === 0;
+      }
+    }
+
+    // Active shield visual rotation & energy pulse
+    if (this.hasShield && this.shieldGroup && this.shieldGroup.visible) {
+      if (this.shieldHexMesh) {
+        this.shieldHexMesh.rotation.y += delta * 1.6;
+        this.shieldHexMesh.rotation.x += delta * 0.9;
+      }
+      if (this.shieldRingMesh) {
+        this.shieldRingMesh.rotation.z += delta * 2.2;
+      }
+      if (this.shieldRing2Mesh) {
+        this.shieldRing2Mesh.rotation.y -= delta * 1.8;
+      }
+      const s = 1.0 + Math.sin(this.animTime * 5.5) * 0.04;
+      this.shieldGroup.scale.set(s, s, s);
+    }
+
     // 1. Update trail particles
     this.updateTrailParticles(delta);
 
@@ -553,11 +673,50 @@ export class Player {
           this.speed = Math.min(this.speed + GAME_CONFIG.player.speedStep, GAME_CONFIG.player.maxSpeed);
         }
         break;
+      case PowerUpType.SHIELD:
+        this.hasShield = true;
+        if (this.shieldGroup) this.shieldGroup.visible = true;
+        this.audio.playShieldUp();
+        break;
     }
+  }
+
+  private consumeShield(): void {
+    this.hasShield = false;
+    if (this.shieldGroup) this.shieldGroup.visible = false;
+    this.invulnerableTimer = 1.2; // 1.2s mercy i-frames to safely escape explosion flames or enemy touch
+    this.audio.playShieldBreak();
+    this.spawnShieldBreakShockwave();
+  }
+
+  private spawnShieldBreakShockwave(): void {
+    if (this.shieldShockwave) {
+      this.scene.remove(this.shieldShockwave);
+      this.shieldShockwave = null;
+    }
+    const ringGeo = new THREE.RingGeometry(0.25, 0.42, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: this.isRival ? 0xff2a55 : 0x00f5d4,
+      transparent: true,
+      opacity: 0.95,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.shieldShockwave = new THREE.Mesh(ringGeo, ringMat);
+    this.shieldShockwave.rotation.x = -Math.PI / 2;
+    this.shieldShockwave.position.copy(this.mesh.position);
+    this.shieldShockwave.position.y += 0.45;
+    this.scene.add(this.shieldShockwave);
+    this.shockwaveTimer = 0.42;
   }
 
   public kill(type: DeathType = DeathType.FIRE): void {
     if (this.isDying || !this.isAlive) return;
+    if (this.invulnerableTimer > 0) return;
+    if (this.hasShield) {
+      this.consumeShield();
+      return;
+    }
     this.isDying = true;
     this.deathType = type;
     this.deathTimer = 0;
@@ -772,6 +931,14 @@ export class Player {
     this.fireDeathSubStage = 0;
     this.enemyDeathSubStage = 0;
     this.activeBombTile = null;
+
+    this.hasShield = false;
+    this.invulnerableTimer = 0;
+    if (this.shieldGroup) this.shieldGroup.visible = false;
+    if (this.shieldShockwave) {
+      this.scene.remove(this.shieldShockwave);
+      this.shieldShockwave = null;
+    }
 
     this.currentPitch = 0;
     this.currentRoll = 0;
