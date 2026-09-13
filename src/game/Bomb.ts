@@ -24,6 +24,11 @@ export class Bomb {
   private mixer: THREE.AnimationMixer | null = null;
   private lastTickSec: number = 0;
   private beaconMesh: THREE.Mesh | null = null;
+  private groundRing: THREE.Mesh | null = null;
+  private bodyMaterial: THREE.MeshStandardMaterial | null = null;
+  private sparkMeshes: THREE.Mesh[] = [];
+  private baseScale: number = 1.0;
+  private impactBounce: number = 0;
   private animTime: number = 0;
 
   constructor(
@@ -48,6 +53,42 @@ export class Bomb {
     this.isRemote = isRemote;
     this.isPierce = isPierce;
 
+    // Traverse and enhance materials for razor-sharp visual clarity
+    this.mesh.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const m = child as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+
+        if (m.name.includes('Spark')) {
+          this.sparkMeshes.push(m);
+        }
+
+        if (m.material) {
+          const mats = Array.isArray(m.material) ? m.material : [m.material];
+          for (const mat of mats) {
+            const std = mat as THREE.MeshStandardMaterial;
+            const isBombBody = std?.name === 'NormalBomb_Iron' || m.name === 'Bomb_Body';
+            if (std?.isMeshStandardMaterial && isBombBody) {
+              this.bodyMaterial = std;
+              // Keep the shell charcoal-metallic. The previous hot emissive values
+              // overwhelmed this base color and made the entire bomb look salmon pink.
+              std.color.setHex(0x293447);
+              std.roughness = 0.28;
+              std.metalness = 0.62;
+              std.emissive.setHex(0x000000);
+              std.emissiveIntensity = 0;
+            } else if (std?.isMeshStandardMaterial && std.name === 'NormalBomb_Collar') {
+              std.roughness = 0.20;
+              std.metalness = 0.65;
+            } else if (std?.isMeshStandardMaterial && std.name.includes('Spark')) {
+              std.emissiveIntensity = 4.0;
+            }
+          }
+        }
+      }
+    });
+
     if (this.mesh.animations && this.mesh.animations.length > 0) {
       this.mixer = new THREE.AnimationMixer(this.mesh);
       for (const clip of this.mesh.animations) {
@@ -58,8 +99,23 @@ export class Bomb {
       }
     }
 
+    // Crisp glowing ground danger ring under the bomb (guarantees 100% visibility even in dark wall shadows!)
+    const ringGeo = new THREE.RingGeometry(0.38, 0.52, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: this.isRemote ? 0xef4444 : (this.isPierce ? 0xa855f7 : 0xff3b00),
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.groundRing = new THREE.Mesh(ringGeo, ringMat);
+    this.groundRing.rotation.x = -Math.PI / 2;
+    this.groundRing.position.set(0, 0.03, 0);
+    this.mesh.add(this.groundRing);
+
     if (this.isRemote) {
-      // High-tech red/cyan pulsing remote detonator antenna beacon
+      // Red pulsing remote detonator antenna beacon, matching the remote pickup and HUD action
       const beaconGeo = new THREE.SphereGeometry(0.12, 10, 10);
       const beaconMat = new THREE.MeshStandardMaterial({
         color: 0xff1525,
@@ -92,8 +148,8 @@ export class Bomb {
     this.mesh.position.copy(this.baseWorldPos);
 
     // Subtle scale modifier based on blast power
-    const powerScale = 1.05 + Math.min(0.25, (blastRange - 1) * 0.04);
-    this.mesh.scale.set(powerScale, powerScale, powerScale);
+    this.baseScale = 1.05 + Math.min(0.25, (blastRange - 1) * 0.04);
+    this.mesh.scale.set(this.baseScale, this.baseScale, this.baseScale);
 
     this.audio.playPlaceBomb();
   }
@@ -129,9 +185,10 @@ export class Bomb {
       this.mesh.position.x += this.moveDir.x * step;
       this.mesh.position.z += this.moveDir.z * step;
 
-      // Dynamic 3D roll as it slides
-      this.mesh.rotation.x += this.moveDir.z * step * 2.8;
-      this.mesh.rotation.z -= this.moveDir.x * step * 2.8;
+      // Clean arcade slide with rapid upright spin (keeps fuse ON TOP and prevents floor clipping!)
+      this.mesh.rotation.y += step * 7.5;
+      this.mesh.rotation.x = this.moveDir.z * 0.12;
+      this.mesh.rotation.z = -this.moveDir.x * 0.12;
 
       const currentCell = grid.worldToGrid(this.mesh.position);
 
@@ -165,27 +222,77 @@ export class Bomb {
           this.mesh.position.z = cellCenter.z;
           this.isMoving = false;
           this.moveDir = { x: 0, z: 0 };
+          this.mesh.rotation.x = 0;
+          this.mesh.rotation.z = 0;
+          this.impactBounce = 0.22; // Satisfying arcade impact squash & stretch!
           if (grid.isInBounds(this.col, this.row)) {
             grid.setTile(this.col, this.row, TileType.BOMB);
           }
           this.audio.playBombBounce();
         }
       }
+    } else {
+      // Ensure resting bomb is always perfectly upright
+      if (Math.abs(this.mesh.rotation.x) > 0.001) this.mesh.rotation.x = 0;
+      if (Math.abs(this.mesh.rotation.z) > 0.001) this.mesh.rotation.z = 0;
+    }
+
+    // Impact bounce animation when bomb hits wall / reaches final position
+    if (this.impactBounce > 0) {
+      this.impactBounce = Math.max(0, this.impactBounce - delta);
+      const t = this.impactBounce / 0.22;
+      const squash = Math.sin(t * Math.PI) * 0.22;
+      this.mesh.scale.set(
+        this.baseScale * (1.0 + squash * 0.35),
+        this.baseScale * (1.0 - squash * 0.4),
+        this.baseScale * (1.0 + squash * 0.35)
+      );
     }
 
     this.animTime += delta;
 
+    const progress = Math.min(1.0, 1.0 - Math.max(0, this.fuseTimer / this.initialFuse));
+    const pulseFreq = 3.5 + progress * 14.0;
+    const pulse = 0.5 + 0.5 * Math.sin(this.animTime * pulseFreq);
+
+    // Dynamic ground danger ring animation (pulsing radius & opacity)
+    if (this.groundRing) {
+      this.groundRing.scale.setScalar(1.0 + pulse * 0.12);
+      (this.groundRing.material as THREE.MeshBasicMaterial).opacity = 0.55 + pulse * 0.35;
+    }
+
+    // A restrained colored pulse preserves the dark shell; the ring and fuse carry
+    // most of the danger signal without washing the model into a flat bright color.
+    if (this.bodyMaterial) {
+      if (this.isRemote) {
+        this.bodyMaterial.emissive.setHex(0xef4444);
+        this.bodyMaterial.emissiveIntensity = 0.20 + pulse * 0.45;
+      } else if (this.isPierce) {
+        this.bodyMaterial.emissive.setHex(0xa855f7);
+        this.bodyMaterial.emissiveIntensity = 0.20 + pulse * 0.50;
+      } else {
+        // Normal bombs stay gunmetal throughout the fuse. Their animated ring,
+        // scale pulse, and sparks provide urgency without recoloring the shell.
+        this.bodyMaterial.emissive.setHex(0x000000);
+        this.bodyMaterial.emissiveIntensity = 0;
+      }
+    }
+
+    // Active crackling fuse spark particles
+    for (const spark of this.sparkMeshes) {
+      spark.rotation.y += delta * 12.0;
+      spark.scale.setScalar(0.85 + Math.random() * 0.3);
+    }
+
     if (this.isRemote) {
       if (this.beaconMesh) {
         // High-energy pulsing beacon on remote bomb
-        const pulse = 0.5 + 0.5 * Math.sin(this.animTime * 8.0);
         this.beaconMesh.scale.set(1.0 + pulse * 0.4, 1.0 + pulse * 0.4, 1.0 + pulse * 0.4);
       }
       return this.isDetonated;
     }
 
     this.fuseTimer -= delta;
-    const progress = Math.min(1.0, 1.0 - Math.max(0, this.fuseTimer / this.initialFuse));
 
     // Classic ticking sound cadence accelerating naturally from 0.48s down to 0.12s
     const tickInterval = Math.max(0.12, 0.48 - progress * 0.36);
@@ -211,6 +318,11 @@ export class Bomb {
     if (this.mixer) {
       this.mixer.stopAllAction();
       this.mixer = null;
+    }
+    if (this.groundRing) {
+      this.groundRing.geometry.dispose();
+      (this.groundRing.material as THREE.Material).dispose();
+      this.groundRing = null;
     }
     if (grid && grid.isInBounds(this.col, this.row) && grid.getTile(this.col, this.row) === TileType.BOMB) {
       grid.setTile(this.col, this.row, TileType.EMPTY);

@@ -89,13 +89,13 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     name: 'CYBER GRID',
     badge: 'CYBERPUNK NEON CORE',
     subtitle: 'Rogue patrol drones have hijacked the grid matrix.',
-    backgroundColor: 0x0a0d14,
-    fogColor: 0x0a0d14,
-    ambientColor: 0x2d3748,
-    hemiSkyColor: 0x38bdf8,
-    hemiGroundColor: 0x1e1035,
-    dirLightColor: 0xfff2d4,
-    rimLight1Color: 0x00f5d4,
+    backgroundColor: 0x070b14,
+    fogColor: 0x070b14,
+    ambientColor: 0x1b2842,
+    hemiSkyColor: 0x00d8ff,
+    hemiGroundColor: 0x09101f,
+    dirLightColor: 0xf4f8ff,
+    rimLight1Color: 0x00ffff,
     rimLight2Color: 0xff007f,
     floorModel: 'floor-tile',
     wallModel: 'solid-wall',
@@ -203,7 +203,7 @@ export const GAME_CONFIG = {
     duration: 0.70,        // seconds
   },
   powerup: {
-    dropChance: 0.28,      // Balanced drop rate
+    dropChance: 0.18,      // Balanced, moderate drop rate (~18% of breakable blocks)
     weights: {
       [PowerUpType.BOMB_COUNT]: 0.17,
       [PowerUpType.BLAST_RANGE]: 0.17,
@@ -294,3 +294,17 @@ export const ASSET_PATHS: Record<string, string> = {
   'prop-cryo-crystal': '/assets/models/props/prop-cryo-crystal.glb',
   'arena-base': '/assets/models/arena-base.glb',
 };
+
+export const POWERUP_COLORS: Record<PowerUpType, { main: number; glow: number; name: string }> = {
+  [PowerUpType.BOMB_COUNT]:     { main: 0x00f5ff, glow: 0x00d2ff, name: 'BOMB COUNT' },      // Neon Cyan
+  [PowerUpType.BLAST_RANGE]:    { main: 0xff5500, glow: 0xff3b00, name: 'BLAST RANGE' },     // Fiery Orange
+  [PowerUpType.SPEED]:          { main: 0xffee00, glow: 0xffd700, name: 'SPEED' },           // Electric Yellow
+  [PowerUpType.BOMB_KICK]:      { main: 0xd946ef, glow: 0xc026d3, name: 'BOMB KICK' },       // Magenta
+  [PowerUpType.REMOTE_CONTROL]: { main: 0xef4444, glow: 0xdc2626, name: 'REMOTE CONTROL' },  // Laser Red
+  [PowerUpType.BOMB_PASS]:      { main: 0x38bdf8, glow: 0x0ea5e9, name: 'BOMB PASS' },       // Ghost Blue
+  [PowerUpType.PIERCE_BOMB]:    { main: 0xa855f7, glow: 0x9333ea, name: 'PIERCE BOMB' },     // Plasma Purple
+  [PowerUpType.FULL_FIRE]:      { main: 0xf59e0b, glow: 0xd97706, name: 'FULL FIRE' },       // Solar Gold
+  [PowerUpType.SHIELD]:         { main: 0x10b981, glow: 0x059669, name: 'SHIELD' },          // Emerald Barrier
+  [PowerUpType.EXTRA_LIFE]:     { main: 0xf43f5e, glow: 0xe11d48, name: 'EXTRA LIFE' },      // Ruby Pink
+};
+

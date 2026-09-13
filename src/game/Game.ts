@@ -940,7 +940,7 @@ export class Game {
 
         // Destroy breakable blocks and powerups
         this.arena.destroyBlock(col, row);
-        this.arena.destroyPowerUpAt(col, row, this.audio);
+        this.arena.destroyPowerUpAt(col, row, this.audio, true);
       });
 
       if (landed) {

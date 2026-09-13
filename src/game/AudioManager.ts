@@ -655,53 +655,49 @@ export class AudioManager {
     const now = this.ctx.currentTime;
 
     if (stage === 0) {
-      // Stage 0: Balloon Swelling Tension (Rubber stretch rising pitch)
+      // Stage 0: Comic Cartoon Pancake Squash Boing
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(120, now);
-      osc.frequency.exponentialRampToValueAtTime(580, now + 1.0);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(95, now + 0.28);
 
-      gain.gain.setValueAtTime(0.08, now);
-      gain.gain.linearRampToValueAtTime(0.28, now + 0.95);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.05);
+      gain.gain.setValueAtTime(0.40, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
 
       osc.connect(gain);
       gain.connect(this.masterGain);
       osc.start(now);
-      osc.stop(now + 1.05);
+      osc.stop(now + 0.32);
+
+      // Squishy comic slap
+      const oscSlap = this.ctx.createOscillator();
+      const gainSlap = this.ctx.createGain();
+      oscSlap.type = 'sawtooth';
+      oscSlap.frequency.setValueAtTime(260, now);
+      oscSlap.frequency.exponentialRampToValueAtTime(45, now + 0.18);
+      gainSlap.gain.setValueAtTime(0.35, now);
+      gainSlap.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
+      oscSlap.connect(gainSlap);
+      gainSlap.connect(this.masterGain);
+      oscSlap.start(now);
+      oscSlap.stop(now + 0.20);
     } else if (stage === 1) {
-      // Stage 1: Explosive Blood POP & Splat
-      // 1. Noise burst
-      const bufferSize = this.ctx.sampleRate * 0.18;
-      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.04));
-      }
-      const noise = this.ctx.createBufferSource();
-      noise.buffer = buffer;
-      const noiseGain = this.ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.40, now);
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-      noise.connect(noiseGain);
-      noiseGain.connect(this.masterGain);
-      noise.start(now);
+      // Stage 1: Comic Slinky Spring Eye Pop (BOOOIIING!)
+      const oscSpring = this.ctx.createOscillator();
+      const gainSpring = this.ctx.createGain();
+      oscSpring.type = 'sine';
+      oscSpring.frequency.setValueAtTime(160, now);
+      oscSpring.frequency.exponentialRampToValueAtTime(680, now + 0.18);
+      oscSpring.frequency.exponentialRampToValueAtTime(420, now + 0.38);
 
-      // 2. Wet squelch pop
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(320, now);
-      osc.frequency.exponentialRampToValueAtTime(75, now + 0.16);
+      gainSpring.gain.setValueAtTime(0.35, now);
+      gainSpring.gain.exponentialRampToValueAtTime(0.001, now + 0.40);
 
-      gain.gain.setValueAtTime(0.45, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(now);
-      osc.stop(now + 0.18);
+      oscSpring.connect(gainSpring);
+      gainSpring.connect(this.masterGain);
+      oscSpring.start(now);
+      oscSpring.stop(now + 0.40);
     } else if (stage === 2) {
       // Stage 2: Celestial Angelic Harp Arpeggio (Soul ascending to heaven)
       const harpNotes = [523.25, 659.25, 783.99, 1046.50, 1318.51]; // C5, E5, G5, C6, E6
@@ -1043,83 +1039,74 @@ export class AudioManager {
     const now = this.ctx.currentTime;
 
     if (stage === 0) {
-      // Stage 0: Warning air pressure hiss + rising pitch balloon inflation
+      // Stage 0: Rapid metallic jitter vibration / warning buzzer
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(180, now);
-      osc.frequency.exponentialRampToValueAtTime(680, now + 0.7);
+      osc.frequency.setValueAtTime(140, now);
+      osc.frequency.linearRampToValueAtTime(320, now + 0.65);
 
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.linearRampToValueAtTime(0.3, now + 0.65);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.72);
+      // Amplitude modulation for frantic vibration shudder
+      const lfo = this.ctx.createOscillator();
+      const lfoGain = this.ctx.createGain();
+      lfo.frequency.setValueAtTime(28, now);
+      lfoGain.gain.setValueAtTime(0.18, now);
+      lfo.connect(lfoGain.gain);
+
+      gain.gain.setValueAtTime(0.20, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.70);
 
       osc.connect(gain);
       gain.connect(this.masterGain);
+      lfo.start(now);
       osc.start(now);
-      osc.stop(now + 0.72);
+      lfo.stop(now + 0.70);
+      osc.stop(now + 0.70);
     } else if (stage === 1) {
-      // Stage 1: Rubbery wobble stretch tension (strained creak)
-      const oscCreak = this.ctx.createOscillator();
-      const gainCreak = this.ctx.createGain();
-      oscCreak.type = 'triangle';
-      oscCreak.frequency.setValueAtTime(540, now);
-      oscCreak.frequency.linearRampToValueAtTime(820, now + 0.4);
-      oscCreak.frequency.linearRampToValueAtTime(960, now + 0.8);
+      // Stage 1: Big Cartoon Spring Eye Pop (BOOOIIING!)
+      const oscSpring = this.ctx.createOscillator();
+      const gainSpring = this.ctx.createGain();
+      oscSpring.type = 'sine';
+      oscSpring.frequency.setValueAtTime(180, now);
+      oscSpring.frequency.exponentialRampToValueAtTime(750, now + 0.22);
+      oscSpring.frequency.exponentialRampToValueAtTime(380, now + 0.55);
 
-      gainCreak.gain.setValueAtTime(0.2, now);
-      gainCreak.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      gainSpring.gain.setValueAtTime(0.40, now);
+      gainSpring.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
 
-      oscCreak.connect(gainCreak);
-      gainCreak.connect(this.masterGain);
-      oscCreak.start(now);
-      oscCreak.stop(now + 0.85);
+      oscSpring.connect(gainSpring);
+      gainSpring.connect(this.masterGain);
+      oscSpring.start(now);
+      oscSpring.stop(now + 0.58);
     } else if (stage === 2) {
-      // Stage 2: Loud violent balloon POP! + confetti horn tweet
-      const bufferSize = Math.floor(this.ctx.sampleRate * 0.15);
+      // Stage 2: Heavy Comic Faceplant Board / Anvil Impact (THWACK-CLATTER!)
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.22);
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.02));
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.035));
       }
       const noise = this.ctx.createBufferSource();
       noise.buffer = buffer;
       const noiseGain = this.ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.6, now);
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      noiseGain.gain.setValueAtTime(0.65, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
       noise.connect(noiseGain);
       noiseGain.connect(this.masterGain);
       noise.start(now);
 
-      // Squelch pop
-      const oscPop = this.ctx.createOscillator();
-      const gainPop = this.ctx.createGain();
-      oscPop.type = 'sine';
-      oscPop.frequency.setValueAtTime(750, now);
-      oscPop.frequency.exponentialRampToValueAtTime(60, now + 0.14);
-      gainPop.gain.setValueAtTime(0.5, now);
-      gainPop.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-      oscPop.connect(gainPop);
-      gainPop.connect(this.masterGain);
-      oscPop.start(now);
-      oscPop.stop(now + 0.14);
-
-      // Party horn tweet!
-      const hornTime = now + 0.08;
-      const notes = [523.25, 659.25]; // C5, E5
-      notes.forEach(f => {
-        if (!this.ctx || !this.masterGain) return;
-        const oscHorn = this.ctx.createOscillator();
-        const gainHorn = this.ctx.createGain();
-        oscHorn.type = 'sawtooth';
-        oscHorn.frequency.setValueAtTime(f, hornTime);
-        gainHorn.gain.setValueAtTime(0.18, hornTime);
-        gainHorn.gain.exponentialRampToValueAtTime(0.001, hornTime + 0.35);
-        oscHorn.connect(gainHorn);
-        gainHorn.connect(this.masterGain);
-        oscHorn.start(hornTime);
-        oscHorn.stop(hornTime + 0.35);
-      });
+      // Low frequency floor thud
+      const oscThud = this.ctx.createOscillator();
+      const gainThud = this.ctx.createGain();
+      oscThud.type = 'triangle';
+      oscThud.frequency.setValueAtTime(180, now);
+      oscThud.frequency.exponentialRampToValueAtTime(35, now + 0.20);
+      gainThud.gain.setValueAtTime(0.70, now);
+      gainThud.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
+      oscThud.connect(gainThud);
+      gainThud.connect(this.masterGain);
+      oscThud.start(now);
+      oscThud.stop(now + 0.20);
     } else if (stage === 3) {
       // Stage 3: Comic dizzy tweet stars chirping
       const starNotes = [1174, 1318, 1567, 1396, 1760];

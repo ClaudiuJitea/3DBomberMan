@@ -30,6 +30,7 @@ export class Arena {
   private props: THREE.Group[] = [];
   private powerups: PowerUp[] = [];
   private debrisList: DebrisParticle[] = [];
+  private stagePowerUpsSpawned: number = 0;
 
   // Exit Portal (Classic Adventure)
   public exitPortalMesh: THREE.Group | null = null;
@@ -205,8 +206,9 @@ export class Arena {
       return; // Do not spawn a powerup on top of the exit portal
     }
 
-    // Roll for power-up spawn
-    if (Math.random() < GAME_CONFIG.powerup.dropChance) {
+    // Roll for power-up spawn (capped at 3 items per stage to keep powerups rewarding and avoid corridor clutter)
+    if (this.stagePowerUpsSpawned < 3 && this.powerups.length < 3 && Math.random() < GAME_CONFIG.powerup.dropChance) {
+      this.stagePowerUpsSpawned++;
       this.spawnPowerUp(col, row);
     }
   }
@@ -314,10 +316,13 @@ export class Arena {
     this.powerups.push(p);
   }
 
-  public destroyPowerUpAt(col: number, row: number, audio?: any): boolean {
+  public destroyPowerUpAt(col: number, row: number, audio?: any, force: boolean = false): boolean {
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const pu = this.powerups[i];
       if (pu.col === col && pu.row === row) {
+        if (!force && pu.isInvulnerable()) {
+          return false;
+        }
         pu.dispose(this.scene);
         this.powerups.splice(i, 1);
         if (audio && audio.playPowerUpDestroyed) {
@@ -431,5 +436,6 @@ export class Arena {
     this.props = [];
     this.powerups = [];
     this.debrisList = [];
+    this.stagePowerUpsSpawned = 0;
   }
 }

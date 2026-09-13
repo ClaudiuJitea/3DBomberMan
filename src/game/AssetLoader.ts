@@ -38,15 +38,25 @@ export class AssetLoader {
                 const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
                 for (const m of mats) {
                   const mat = m as THREE.MeshStandardMaterial;
-                  // Ensure warm, vibrant, non-inox stylized finish across all 3D assets
-                  if (mat.metalness !== undefined) {
-                    mat.metalness = Math.min(mat.metalness, 0.20);
-                  }
-                  if (mat.roughness !== undefined) {
-                    mat.roughness = Math.max(mat.roughness, 0.45);
-                  }
-                  if (mat.emissive && (mat.emissive.r > 0 || mat.emissive.g > 0 || mat.emissive.b > 0)) {
-                    mat.emissiveIntensity = 3.0;
+                  if (key.startsWith('powerup-')) {
+                    // For power-ups, preserve their rich authentic materials (gold, dark metal, colors)
+                    // and calibrate emissive accents so they don't blow out into white in ACES tone mapping
+                    if (mat.emissive && (mat.emissive.r > 0.02 || mat.emissive.g > 0.02 || mat.emissive.b > 0.02)) {
+                      mat.emissiveIntensity = 0.85;
+                    } else if (mat.emissive) {
+                      mat.emissiveIntensity = 0.0;
+                    }
+                  } else {
+                    // Ensure warm, vibrant, non-inox stylized finish across all 3D assets
+                    if (mat.metalness !== undefined) {
+                      mat.metalness = Math.min(mat.metalness, 0.20);
+                    }
+                    if (mat.roughness !== undefined) {
+                      mat.roughness = Math.max(mat.roughness, 0.45);
+                    }
+                    if (mat.emissive && (mat.emissive.r > 0 || mat.emissive.g > 0 || mat.emissive.b > 0)) {
+                      mat.emissiveIntensity = 3.0;
+                    }
                   }
                 }
               }

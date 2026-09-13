@@ -24,6 +24,14 @@ export class Enemy {
   public isDying: boolean = false;
   public health: number = 1;
   public maxHealth: number = 1;
+  public static readonly DEATH_VARIANTS: Array<'cuckoo' | 'rocket' | 'balloon' | 'spring'> = [
+    'cuckoo',
+    'rocket',
+    'balloon',
+    'spring',
+  ];
+  public static spawnRotationIndex: number = 0;
+  public static deathRotationIndex: number = 0;
   private damageFlashTimer: number = 0;
   private deathTimer: number = 0;
   private deathModel: THREE.Group | null = null;
@@ -125,7 +133,7 @@ export class Enemy {
       this.mesh.add(this.deathSpringModel);
     }
 
-    // Randomly select between the hilarious death animations
+    // Rotate death variant sequentially across spawns
     const availableVariants: ('cuckoo' | 'rocket' | 'balloon' | 'spring')[] = [];
     if (deathModel) availableVariants.push('cuckoo');
     if (deathRocketModel) availableVariants.push('rocket');
@@ -133,7 +141,8 @@ export class Enemy {
     if (deathSpringModel) availableVariants.push('spring');
 
     if (availableVariants.length > 0) {
-      this.deathVariant = availableVariants[Math.floor(Math.random() * availableVariants.length)];
+      this.deathVariant = availableVariants[Enemy.spawnRotationIndex % availableVariants.length];
+      Enemy.spawnRotationIndex++;
     } else {
       this.deathVariant = 'cuckoo';
     }
@@ -610,6 +619,18 @@ export class Enemy {
     this.deathTimer = 0;
     this.deathAudioStage = 0;
 
+    // Advance death variant rotation so every robot death showcases the next hilarious animation in sequence
+    const availableVariants: ('cuckoo' | 'rocket' | 'balloon' | 'spring')[] = [];
+    if (this.deathModel) availableVariants.push('cuckoo');
+    if (this.deathRocketModel) availableVariants.push('rocket');
+    if (this.deathBalloonModel) availableVariants.push('balloon');
+    if (this.deathSpringModel) availableVariants.push('spring');
+
+    if (availableVariants.length > 0) {
+      this.deathVariant = availableVariants[Enemy.deathRotationIndex % availableVariants.length];
+      Enemy.deathRotationIndex++;
+    }
+
     let chosenDeathModel: THREE.Group | null = null;
     if (this.deathVariant === 'spring' && this.deathSpringModel) {
       chosenDeathModel = this.deathSpringModel;
@@ -622,6 +643,9 @@ export class Enemy {
     }
 
     if (chosenDeathModel) {
+      // Rotate dying enemy to face directly towards the camera so the comical death prop (sign, flag, balloon, rocket) is in full view
+      this.mesh.rotation.set(0, 0, 0);
+
       // Hide living model meshes
       for (const child of this.livingModelChildren) {
         child.visible = false;
@@ -680,17 +704,17 @@ export class Enemy {
           this.audio.playEnemySpringDeath(3);
         }
       } else if (this.deathVariant === 'balloon') {
-        // Stage 1: Rubbery wobble creak stretch at ~0.80s
+        // Stage 1: Comic slinky spring eye-pop (BOOOIIING!) at ~0.80s (Blender Frame 25)
         if (this.deathTimer >= 0.80 && this.deathAudioStage === 0) {
           this.deathAudioStage = 1;
           this.audio.playEnemyBalloonDeath(1);
         }
-        // Stage 2: Violent balloon POP! + horn tweet at ~1.65s
+        // Stage 2: Heavy stiff-board faceplant impact (THWACK!) at ~1.65s (Blender Frame 56)
         else if (this.deathTimer >= 1.65 && this.deathAudioStage === 1) {
           this.deathAudioStage = 2;
           this.audio.playEnemyBalloonDeath(2);
         }
-        // Stage 3: Dizzy stars chirping at ~2.15s
+        // Stage 3: Dizzy stars chirping in circle at ~2.15s (Blender Frame 65)
         else if (this.deathTimer >= 2.15 && this.deathAudioStage === 2) {
           this.deathAudioStage = 3;
           this.audio.playEnemyBalloonDeath(3);

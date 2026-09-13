@@ -88,7 +88,6 @@ export class Explosion {
           const isTip = !isPierce && ((dist === blastRange) || !grid.isInBounds(c + dx, r + dz));
           this.queueFlameTile(c, r, dist, delay, assets.cloneModel(isTip ? 'explosion-tip' : 'explosion-beam'), rotY, () => {
             onDestroyBlock(c, r);
-            onDestroyPowerUp?.(c, r);
           });
           // Pierce bomb punches straight through breakable blocks!
           if (!isPierce) {

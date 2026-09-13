@@ -934,13 +934,13 @@ export class Player {
   private updateEnemyDeathSounds(): void {
     const t = this.deathTimer;
 
-    // Stage 1: Explosive Blood & Remains POP at ~1.03s (Blender Frame 31)
-    if (t >= 1.03 && this.enemyDeathSubStage === 0) {
+    // Stage 1: Comic Slinky Spring Eye Pop at ~0.35s (Blender Frame 11)
+    if (t >= 0.35 && this.enemyDeathSubStage === 0) {
       this.enemyDeathSubStage = 1;
       this.audio.playEnemyDeathBoing(1);
     }
-    // Stage 2: Celestial Angelic Harp Arpeggio as Soul ascends to heaven at ~1.25s (Blender Frame 38)
-    else if (t >= 1.25 && this.enemyDeathSubStage === 1) {
+    // Stage 2: Celestial Angelic Harp Arpeggio as Soul ascends to heaven at ~0.95s (Blender Frame 29)
+    else if (t >= 0.95 && this.enemyDeathSubStage === 1) {
       this.enemyDeathSubStage = 2;
       this.audio.playEnemyDeathBoing(2);
     }

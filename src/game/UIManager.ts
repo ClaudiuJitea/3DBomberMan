@@ -569,7 +569,12 @@ export class UIManager {
             </svg>`;
       }
       if (textLabel) {
-        textLabel.textContent = muted ? 'MUTED' : 'AUDIO';
+        textLabel.textContent = 'AUDIO';
+      }
+      const statusVal = document.getElementById('mute-status-val');
+      if (statusVal) {
+        statusVal.textContent = muted ? 'OFF' : 'ON';
+        statusVal.classList.toggle('muted', muted);
       }
     }
   }
@@ -595,8 +600,13 @@ export class UIManager {
     if (this.stageNameEl) {
       this.stageNameEl.textContent = stageName;
     }
-    if (this.stageBadgeEl && theme) {
-      this.stageBadgeEl.setAttribute('data-theme', theme.toLowerCase());
+    const themeKey = (theme || 'cyber').toLowerCase();
+    if (this.stageBadgeEl) {
+      this.stageBadgeEl.setAttribute('data-theme', themeKey);
+    }
+    const hudContainer = document.getElementById('hud');
+    if (hudContainer) {
+      hudContainer.setAttribute('data-theme', themeKey);
     }
   }
 
